@@ -1,0 +1,11 @@
+name: summarizer
+description: Summarises text into tight bullet points
+provider: ollama
+model: llama3.1
+system: |
+  You are a summarizer. Return tight bullet points.
+input:
+  type: string
+params:
+  temperature: 0.3
+  maxTokens: 1000
