@@ -80,8 +80,25 @@ app.post("/agents/:name/invoke", async (c) => {
 
   return streamSSE(c, async (sse) => {
     try {
-      for await (const delta of result.textStream) {
-        await sse.writeSSE({ data: JSON.stringify({ delta }) });
+      for await (const part of result.fullStream) {
+        if (part.type === "text-delta") {
+          await sse.writeSSE({ data: JSON.stringify({ delta: part.textDelta }) });
+        } else if (part.type === "tool-call") {
+          await sse.writeSSE({
+            data: JSON.stringify({ toolCall: { name: part.toolName, args: part.args } }),
+          });
+        } else if ((part.type as string) === "tool-result") {
+          // ToolSet's execute is optional at the type level, so TS can't prove a
+          // result always exists here even though our tools always define one.
+          const { toolName, result } = part as unknown as { toolName: string; result: unknown };
+          await sse.writeSSE({ data: JSON.stringify({ toolResult: { name: toolName, result } }) });
+        } else if (part.type === "error") {
+          await sse.writeSSE({
+            data: JSON.stringify({
+              error: part.error instanceof Error ? part.error.message : String(part.error),
+            }),
+          });
+        }
       }
       await sse.writeSSE({ data: JSON.stringify({ done: true }) });
     } catch (err) {

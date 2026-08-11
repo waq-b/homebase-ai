@@ -2,7 +2,7 @@ import { generateText, streamText, type CoreMessage } from "ai";
 import type { z } from "zod";
 import { inputPayloadSchema, type AgentConfig } from "./config.js";
 import { getModel } from "./providers.js";
-import { loadHooks, runHook, type InvokeContext } from "./hooks.js";
+import { loadHooks, runHook, type AgentHooks, type InvokeContext } from "./hooks.js";
 
 export class InputValidationError extends Error {
   constructor(public readonly issues: z.ZodIssue[]) {
@@ -35,6 +35,9 @@ const toMessages = (agent: AgentConfig, input: unknown): CoreMessage[] => {
   return messages;
 };
 
+/** Tool-calling round-trips (call -> result -> follow-up) can take a few steps. */
+const MAX_TOOL_STEPS = 5;
+
 const prepare = async (agent: AgentConfig, rawBody: unknown) => {
   const parsed = inputPayloadSchema(agent.input).safeParse(rawBody);
   if (!parsed.success) throw new InputValidationError(parsed.error.issues);
@@ -46,18 +49,23 @@ const prepare = async (agent: AgentConfig, rawBody: unknown) => {
   return { hooks, ctx, messages: toMessages(agent, input) };
 };
 
-/** Runs an agent end-to-end: validate input -> beforeInvoke -> model call -> afterInvoke. */
+const callSettings = (agent: AgentConfig, hooks: AgentHooks) => {
+  const hasTools = Boolean(hooks.tools && Object.keys(hooks.tools).length > 0);
+  return {
+    model: getModel(agent, { hasTools }),
+    temperature: agent.params?.temperature,
+    maxTokens: agent.params?.maxTokens,
+    ...(hasTools ? { tools: hooks.tools, maxSteps: MAX_TOOL_STEPS } : {}),
+  };
+};
+
+/** Runs an agent end-to-end: validate input -> beforeInvoke -> model call (w/ tool-calling) -> afterInvoke. */
 export const invokeAgent = async (agent: AgentConfig, rawBody: unknown): Promise<string> => {
   const { hooks, ctx, messages } = await prepare(agent, rawBody);
 
   let text: string;
   try {
-    const result = await generateText({
-      model: getModel(agent),
-      messages,
-      temperature: agent.params?.temperature,
-      maxTokens: agent.params?.maxTokens,
-    });
+    const result = await generateText({ ...callSettings(agent, hooks), messages });
     text = result.text;
   } catch (err) {
     throw new ProviderError(err instanceof Error ? err.message : "Model call failed", err);
@@ -67,19 +75,15 @@ export const invokeAgent = async (agent: AgentConfig, rawBody: unknown): Promise
 };
 
 /**
- * Runs an agent for SSE streaming. afterInvoke does not apply here — tokens
- * are already flushed to the client by the time the full text is known.
+ * Runs an agent for SSE streaming, with tool-calling if the agent defines
+ * tools. afterInvoke does not apply here — tokens are already flushed to
+ * the client by the time the full text is known.
  */
 export const invokeAgentStream = async (agent: AgentConfig, rawBody: unknown) => {
-  const { messages } = await prepare(agent, rawBody);
+  const { hooks, messages } = await prepare(agent, rawBody);
 
   try {
-    return streamText({
-      model: getModel(agent),
-      messages,
-      temperature: agent.params?.temperature,
-      maxTokens: agent.params?.maxTokens,
-    });
+    return streamText({ ...callSettings(agent, hooks), messages });
   } catch (err) {
     throw new ProviderError(err instanceof Error ? err.message : "Model call failed", err);
   }

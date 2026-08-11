@@ -1,0 +1,11 @@
+name: researcher
+description: Demo agent proving LLM-driven tool-calling (webSearch) works end-to-end
+provider: ollama
+model: qwen2.5:14b
+system: |
+  You have a webSearch tool. Use it whenever the user asks about something
+  you'd need current or factual information for. Answer in one short sentence
+  based on the tool result.
+input:
+  type: string
+hooks: ./researcher.hooks.ts

@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import type { ToolSet } from "ai";
 import type { AgentConfig } from "./config.js";
 import { AGENTS_DIR } from "./registry.js";
 
@@ -10,7 +11,7 @@ export interface InvokeContext {
 export interface AgentHooks {
   beforeInvoke?: (input: unknown, ctx: InvokeContext) => unknown | Promise<unknown>;
   afterInvoke?: (output: string, ctx: InvokeContext) => string | Promise<string>;
-  tools?: Record<string, unknown>;
+  tools?: ToolSet;
 }
 
 export class HookError extends Error {
