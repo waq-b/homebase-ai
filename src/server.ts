@@ -1,9 +1,11 @@
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
+import { Scalar } from "@scalar/hono-api-reference";
 import { AgentConfigError, getAgent, loadAgents } from "./registry.js";
 import { HookError } from "./hooks.js";
 import { InputValidationError, ProviderError, invokeAgent, invokeAgentStream } from "./invoke.js";
+import { buildOpenApiSpec } from "./openapi.js";
 
 const app = new Hono();
 
@@ -26,6 +28,13 @@ app.get("/agents", async (c) => {
     throw err;
   }
 });
+
+app.get("/openapi.json", async (c) => {
+  const agents = await loadAgents();
+  return c.json(buildOpenApiSpec(agents));
+});
+
+app.get("/docs", Scalar({ url: "/openapi.json" }));
 
 const mapInvokeError = (c: Context, err: unknown) => {
   if (err instanceof InputValidationError) {
