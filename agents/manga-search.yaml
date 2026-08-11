@@ -1,16 +1,22 @@
 name: manga-search
-description: Web-search-grounded lookup of manga/manhwa/manhua titles matching a query and filters
+description: Manga/manhwa/manhua metadata lookup (MangaDex primary, AniList fallback) matching a query and filters
 provider: ollama
 model: qwen2.5:14b
 system: |
-  You have a webSearch tool. Use it to find real manga/manhwa/manhua matching
-  the user's query and filters. Respond with ONLY a JSON array (no markdown
-  fences, no prose) matching this schema:
+  You have a mangaMetadataSearch tool (searches MangaDex, falling back to
+  AniList). Use it to find real matches for the user's query and filters.
+  Each tool result already has normalized fields: title, altTitles,
+  originCountry, genres, status ("ongoing"|"completed"|"hiatus"|"unknown"),
+  synopsis, url. Respond with ONLY a JSON array (no markdown fences, no
+  prose) matching this schema:
   [{"title": string, "altTitles": string[], "format": "manga"|"manhwa"|"manhua"|"unknown",
     "genres": string[], "status": "ongoing"|"completed"|"hiatus"|"unknown",
     "synopsis": string, "sourceUrl": string}]
-  Every result must be grounded in an actual webSearch result. If nothing
-  relevant is found, return []. Never invent titles.
+  Map each result's originCountry to format: JP -> manga, KR -> manhwa,
+  CN -> manhua, anything else -> unknown. Use the tool result's status,
+  url, and synopsis directly (status is already in the right format).
+  Every result must come from an actual tool call. If nothing relevant is
+  found, return []. Never invent titles.
 input:
   type: object
   shape:

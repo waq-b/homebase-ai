@@ -21,6 +21,23 @@ system: |
     "finished the series") — don't guess aggressively
   - multiple distinct intents (different titles or different actions) -> one
     object per intent in the array
+  - CRITICAL: when a sentence mentions MULTIPLE attributes for the SAME title
+    (e.g. a chapter number AND a rating, even if separated by other clauses
+    about a different title), ALL of those attributes belong on that ONE
+    action object for that title. Never drop an attribute just because
+    another clause about a different title comes between it and the title
+    it belongs to — re-read the whole sentence and attribute every value to
+    its correct title before emitting any objects.
   - ambiguous/unparseable input (no identifiable title or action) -> return []
+
+  Example (attribute merging across a compound sentence — get this right):
+  Input: "finished chapter 12 of Solo Leveling, would give it an 8, and add
+  Omniscient Reader's Viewpoint to my plan to read list"
+  Correct output (rating 8 belongs to Solo Leveling, NOT dropped, NOT moved
+  to the other title):
+  [{"action":"update_chapter","title":"Solo Leveling","status":null,"currentChapter":12,"rating":8,"notes":null},
+   {"action":"add","title":"Omniscient Reader's Viewpoint","status":"plan_to_read","currentChapter":null,"rating":null,"notes":null}]
+  WRONG (this is the bug to avoid): omitting "rating" from the Solo Leveling
+  object because the "add ...to plan to read" clause came after it.
 input:
   type: string

@@ -12,14 +12,29 @@ system: |
                        "currentChapter": number|null, "rating": number|null}],
     "preferences": {"favoriteGenres": string[], "dislikedGenres": string[], "notes": string|null}
   }
-  Rank the candidates for this user. Exclude any candidate whose title already
-  appears in readingList (case-insensitive). Favor genres in favoriteGenres;
-  deprioritize or exclude genres in dislikedGenres. Respond with ONLY a JSON
-  array (no markdown fences, no prose):
+
+  A candidate already in readingList (case-insensitive title match) must be
+  COMPLETELY OMITTED from your output array — not scored, not mentioned, not
+  included with a note explaining it's excluded. It's as if that candidate
+  was never in the input at all. Do not output an entry for it under any
+  circumstances.
+
+  Example — if readingList contains {"title": "Solo Leveling", ...} and
+  candidates contains both "Solo Leveling" and "Tower of God", your output
+  must contain ONLY an entry for "Tower of God". An output like
+  [{"title":"Solo Leveling","score":9,"reason":"already in reading list"},
+   {"title":"Tower of God","score":8,...}]
+  is WRONG — "Solo Leveling" must not appear anywhere in the array, period.
+
+  Rank the remaining candidates (the ones not in readingList) for this user.
+  Favor genres in favoriteGenres; deprioritize or exclude genres in
+  dislikedGenres. Respond with ONLY a JSON array (no markdown fences, no
+  prose) containing ONLY non-excluded candidates:
   [{"title": string (must match a candidate title verbatim), "score": number (1-10),
     "reason": string (1-2 sentences)}]
   Sort descending by score. Never invent a title not in candidates. Return []
-  if candidates is empty.
+  if candidates is empty or every candidate is already in readingList.
+hooks: ./manga-recommend.hooks.ts
 input:
   type: object
   shape:

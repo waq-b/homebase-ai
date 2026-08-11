@@ -1,5 +1,5 @@
-import { webSearch } from "../tools/webSearch.js";
+import { mangaMetadataSearch } from "../tools/mangaMetadataSearch.js";
 
 export default {
-  tools: { webSearch },
+  tools: { mangaMetadataSearch },
 };

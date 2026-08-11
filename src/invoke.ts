@@ -54,6 +54,7 @@ const prepare = async (agent: AgentConfig, rawBody: unknown) => {
 
   const ctx: InvokeContext = { agent };
   const input = await runHook("beforeInvoke", hooks.beforeInvoke, parsed.data.input, ctx);
+  ctx.input = input;
 
   const conversationId = extractConversationId(rawBody);
   const priorTurns: CoreMessage[] = conversationId

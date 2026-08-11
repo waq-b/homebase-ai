@@ -6,6 +6,8 @@ import { AGENTS_DIR } from "./registry.js";
 
 export interface InvokeContext {
   agent: AgentConfig;
+  /** The (possibly beforeInvoke-modified) input for this call — set once prepare() resolves it, so afterInvoke can also see it. */
+  input?: unknown;
 }
 
 export interface AgentHooks {
