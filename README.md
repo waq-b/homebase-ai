@@ -4,6 +4,11 @@ A local "mini-Bedrock": a single gateway that hosts and serves AI agents as HTTP
 
 Full spec: [`HOMEBASE_BRIEF.md`](./HOMEBASE_BRIEF.md). Project conventions: [`claude.md`](./claude.md).
 
+This README covers quickstart/getting started. For deep reference on any feature, see [`docs/`](./docs/):
+- [`docs/agents.md`](./docs/agents.md) — full `AgentConfig`/input-type schema, including nested/array/nullable object shapes
+- [`docs/invoke.md`](./docs/invoke.md) — `/invoke` pipeline, streaming/SSE frame reference, error mapping
+- [`docs/tools-and-hooks.md`](./docs/tools-and-hooks.md) — writing `hooks.ts`, the shared `tools/` convention
+
 ## Quickstart
 
 Requires a local [Ollama](https://ollama.com) server with at least one model pulled (e.g. `ollama pull llama3`).
@@ -146,6 +151,8 @@ src/
 └── openapi.ts        # builds the OpenAPI 3.1 doc from the live registry
 agents/               # <name>.yaml (+ optional <name>.hooks.ts)
 tools/                # shared AI SDK tool() definitions, importable from any hooks.ts
+docs/                 # deep reference per feature — see docs/ links above
+toolbar-app/          # macOS menu bar app (Swift/SwiftUI) to start/stop/status Homebase — separate tech stack
 ```
 
 ## Scripts
