@@ -17,6 +17,15 @@ swift build -c release
 # binary at .build/release/HomebaseBar
 ```
 
+## Build an installable .app
+
+```bash
+./build-app.sh
+# bundle at build/HomebaseBar.app
+```
+
+Double-click to launch, or drag `build/HomebaseBar.app` into `/Applications`. No dock icon (`LSUIElement` in `Info.plist`) — it only shows up in the menu bar.
+
 ## Notes
 
 - The Homebase repo path is hardcoded in `HomebaseController.swift` for v1 (see the ticket — a settings screen can replace this later).
