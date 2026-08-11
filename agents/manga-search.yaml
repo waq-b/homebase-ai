@@ -1,0 +1,21 @@
+name: manga-search
+description: Web-search-grounded lookup of manga/manhwa/manhua titles matching a query and filters
+provider: ollama
+model: qwen2.5:14b
+system: |
+  You have a webSearch tool. Use it to find real manga/manhwa/manhua matching
+  the user's query and filters. Respond with ONLY a JSON array (no markdown
+  fences, no prose) matching this schema:
+  [{"title": string, "altTitles": string[], "format": "manga"|"manhwa"|"manhua"|"unknown",
+    "genres": string[], "status": "ongoing"|"completed"|"hiatus"|"unknown",
+    "synopsis": string, "sourceUrl": string}]
+  Every result must be grounded in an actual webSearch result. If nothing
+  relevant is found, return []. Never invent titles.
+input:
+  type: object
+  shape:
+    query: string
+    genre: string
+    format: string
+    limit: number
+hooks: ./manga-search.hooks.ts

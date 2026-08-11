@@ -1,12 +1,51 @@
 import { z } from "zod";
 
-const fieldTypeSchema = z.enum(["string", "number", "boolean"]);
+const scalarTypeSchema = z.enum(["string", "number", "boolean"]);
 
-const objectShapeToZod = (shape: Record<string, z.infer<typeof fieldTypeSchema>>) => {
+/**
+ * A shape field is either the flat shorthand (`query: string`) or a full spec
+ * for scalars that need `nullable`, or for `array`/`object` nesting. Recursive
+ * via z.lazy since object/array fields can nest arbitrarily deep.
+ */
+type FieldSpec =
+  | z.infer<typeof scalarTypeSchema>
+  | { type: z.infer<typeof scalarTypeSchema>; nullable?: boolean }
+  | { type: "array"; items: FieldSpec; nullable?: boolean }
+  | { type: "object"; shape: Record<string, FieldSpec>; nullable?: boolean };
+
+const fieldSpecSchema: z.ZodType<FieldSpec> = z.lazy(() =>
+  z.union([
+    scalarTypeSchema,
+    z.object({ type: scalarTypeSchema, nullable: z.boolean().optional() }),
+    z.object({ type: z.literal("array"), items: fieldSpecSchema, nullable: z.boolean().optional() }),
+    z.object({
+      type: z.literal("object"),
+      shape: z.record(fieldSpecSchema),
+      nullable: z.boolean().optional(),
+    }),
+  ]),
+);
+
+const scalarToZod = (scalar: z.infer<typeof scalarTypeSchema>) =>
+  scalar === "string" ? z.string() : scalar === "number" ? z.number() : z.boolean();
+
+const fieldSpecToZod = (spec: FieldSpec): z.ZodTypeAny => {
+  if (typeof spec === "string") return scalarToZod(spec);
+
+  const zodType: z.ZodTypeAny =
+    spec.type === "array"
+      ? z.array(fieldSpecToZod(spec.items))
+      : spec.type === "object"
+        ? objectShapeToZod(spec.shape)
+        : scalarToZod(spec.type);
+
+  return spec.nullable ? zodType.nullable() : zodType;
+};
+
+const objectShapeToZod = (shape: Record<string, FieldSpec>) => {
   const fields: Record<string, z.ZodTypeAny> = {};
-  for (const [key, fieldType] of Object.entries(shape)) {
-    fields[key] =
-      fieldType === "string" ? z.string() : fieldType === "number" ? z.number() : z.boolean();
+  for (const [key, spec] of Object.entries(shape)) {
+    fields[key] = fieldSpecToZod(spec);
   }
   return z.object(fields);
 };
@@ -14,7 +53,7 @@ const objectShapeToZod = (shape: Record<string, z.infer<typeof fieldTypeSchema>>
 const inputConfigSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("string") }),
   z.object({ type: z.literal("messages") }),
-  z.object({ type: z.literal("object"), shape: z.record(fieldTypeSchema) }),
+  z.object({ type: z.literal("object"), shape: z.record(fieldSpecSchema) }),
 ]);
 
 export const agentConfigSchema = z.object({

@@ -44,6 +44,35 @@ hooks: ./my-agent.hooks.ts   # optional
 
 It appears immediately in `GET /agents` and `GET /docs`.
 
+### Object input shapes (flat, nested, or nullable)
+
+An `object` input's `shape` map declares one entry per field. The shorthand scalar form (`query: string`) still works for flat fields. For arrays, nested objects, or nullable fields, use the full spec form instead of the shorthand string:
+
+```yaml
+input:
+  type: object
+  shape:
+    query: string              # shorthand scalar
+    limit: number
+    tags:
+      type: array
+      items: string
+    rating:
+      type: number
+      nullable: true            # allows null in addition to the base type
+    preferences:
+      type: object              # nests arbitrarily deep
+      shape:
+        favoriteGenres:
+          type: array
+          items: string
+        notes:
+          type: string
+          nullable: true
+```
+
+Each entry validates via Zod and shows up correctly typed in `/docs`. See `agents/manga-recommend.yaml` for a full nested example.
+
 ### Optional hooks
 
 Add `agents/my-agent.hooks.ts` beside the YAML to hook into the invoke pipeline:

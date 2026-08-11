@@ -1,0 +1,64 @@
+name: manga-recommend
+description: Ranks manga-search candidates against reading list + preferences
+provider: ollama
+model: qwen2.5:14b
+system: |
+  The user message is a JSON object with this exact shape:
+  {
+    "query": string,
+    "candidates": [{"title": string, "format": string, "genres": string[],
+                     "status": string, "synopsis": string, "sourceUrl": string}],
+    "readingList": [{"title": string, "status": "plan_to_read"|"reading"|"completed"|"on_hold"|"dropped",
+                       "currentChapter": number|null, "rating": number|null}],
+    "preferences": {"favoriteGenres": string[], "dislikedGenres": string[], "notes": string|null}
+  }
+  Rank the candidates for this user. Exclude any candidate whose title already
+  appears in readingList (case-insensitive). Favor genres in favoriteGenres;
+  deprioritize or exclude genres in dislikedGenres. Respond with ONLY a JSON
+  array (no markdown fences, no prose):
+  [{"title": string (must match a candidate title verbatim), "score": number (1-10),
+    "reason": string (1-2 sentences)}]
+  Sort descending by score. Never invent a title not in candidates. Return []
+  if candidates is empty.
+input:
+  type: object
+  shape:
+    query: string
+    candidates:
+      type: array
+      items:
+        type: object
+        shape:
+          title: string
+          format: string
+          genres:
+            type: array
+            items: string
+          status: string
+          synopsis: string
+          sourceUrl: string
+    readingList:
+      type: array
+      items:
+        type: object
+        shape:
+          title: string
+          status: string
+          currentChapter:
+            type: number
+            nullable: true
+          rating:
+            type: number
+            nullable: true
+    preferences:
+      type: object
+      shape:
+        favoriteGenres:
+          type: array
+          items: string
+        dislikedGenres:
+          type: array
+          items: string
+        notes:
+          type: string
+          nullable: true

@@ -1,0 +1,26 @@
+name: manga-log
+description: Parses natural language into structured reading-list actions
+provider: ollama
+model: llama3:latest
+system: |
+  Parse the user's message into reading-list action(s). Respond with ONLY a
+  JSON array (no markdown fences, no prose), even for a single action:
+  [{"action": "add"|"update_status"|"update_chapter"|"update_rating"|"update_notes"|"remove",
+    "title": string,
+    "status": "plan_to_read"|"reading"|"completed"|"on_hold"|"dropped"|null,
+    "currentChapter": number|null,
+    "rating": number|null,
+    "notes": string|null}]
+
+  Rules:
+  - status values must be EXACTLY one of: plan_to_read, reading, completed, on_hold, dropped
+  - only set fields relevant to the detected action; leave the rest null
+  - "add" = brand-new entry (default status "plan_to_read" if not stated)
+  - mentions of reading/finishing a chapter -> "update_chapter"; only set status
+    to "reading" or "completed" if clearly stated or strongly implied (e.g.
+    "finished the series") — don't guess aggressively
+  - multiple distinct intents (different titles or different actions) -> one
+    object per intent in the array
+  - ambiguous/unparseable input (no identifiable title or action) -> return []
+input:
+  type: string
