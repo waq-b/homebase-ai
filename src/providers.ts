@@ -1,10 +1,15 @@
 import { createOllama } from "ollama-ai-provider";
-import type { LanguageModel } from "ai";
+import type { EmbeddingModel, LanguageModel } from "ai";
 import type { AgentConfig } from "./config.js";
 
 const ollama = createOllama({
   baseURL: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/api",
 });
+
+export const DEFAULT_EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? "nomic-embed-text";
+
+export const getEmbeddingModel = (modelId: string = DEFAULT_EMBEDDING_MODEL): EmbeddingModel<string> =>
+  ollama.embedding(modelId);
 
 /**
  * Maps an agent's provider/model config to a runnable AI SDK model instance.

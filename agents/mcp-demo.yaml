@@ -1,0 +1,12 @@
+name: mcp-demo
+description: Proof-of-concept agent using tools from an external MCP server (v2.4)
+provider: ollama
+model: qwen2.5:14b
+system: |
+  You have getCurrentTime and rollDice tools from an MCP server. Use them
+  when relevant to answer the user's question. Answer in one short sentence.
+input:
+  type: string
+mcpServers:
+  - name: demo-time
+    url: http://localhost:8787/sse

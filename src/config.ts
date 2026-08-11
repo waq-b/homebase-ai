@@ -70,6 +70,7 @@ export const agentConfigSchema = z.object({
     })
     .optional(),
   hooks: z.string().optional(),
+  mcpServers: z.array(z.object({ name: z.string().min(1), url: z.string().min(1) })).optional(),
 });
 
 export type AgentConfig = z.infer<typeof agentConfigSchema>;

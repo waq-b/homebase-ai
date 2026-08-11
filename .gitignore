@@ -6,3 +6,4 @@ dist/
 .DS_Store
 toolbar-app/.build/
 toolbar-app/build/
+data/

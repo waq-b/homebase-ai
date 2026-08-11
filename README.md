@@ -8,10 +8,14 @@ This README covers quickstart/getting started. For deep reference on any feature
 - [`docs/agents.md`](./docs/agents.md) — full `AgentConfig`/input-type schema, including nested/array/nullable object shapes
 - [`docs/invoke.md`](./docs/invoke.md) — `/invoke` pipeline, streaming/SSE frame reference, error mapping
 - [`docs/tools-and-hooks.md`](./docs/tools-and-hooks.md) — writing `hooks.ts`, the shared `tools/` convention
+- [`docs/embeddings.md`](./docs/embeddings.md) — `POST /embed`
+- [`docs/rag.md`](./docs/rag.md) — knowledge bases: `POST /kb/:name/documents`, `POST /kb/:name/search`
+- [`docs/memory.md`](./docs/memory.md) — conversation memory via `conversationId`, `GET`/`DELETE /memory/:id`
+- [`docs/mcp.md`](./docs/mcp.md) — declaring external MCP servers on an agent
 
 ## Quickstart
 
-Requires a local [Ollama](https://ollama.com) server with at least one model pulled (e.g. `ollama pull llama3`).
+Requires a local [Ollama](https://ollama.com) server with at least one chat model pulled (e.g. `ollama pull llama3`). RAG/embeddings also need an embedding model — `ollama pull nomic-embed-text` (see `docs/embeddings.md`).
 
 ```bash
 npm install
@@ -148,11 +152,18 @@ src/
 ├── providers.ts     # maps agent config to an AI SDK model instance
 ├── invoke.ts        # validate input -> beforeInvoke -> model call -> afterInvoke
 ├── hooks.ts         # loads/executes optional <name>.hooks.ts
-└── openapi.ts        # builds the OpenAPI 3.1 doc from the live registry
+├── openapi.ts        # builds the OpenAPI 3.1 doc from the live registry
+├── db.ts             # node:sqlite + sqlite-vec, shared by rag.ts and memory.ts
+├── embeddings.ts      # POST /embed
+├── rag.ts              # POST /kb/:name/documents, /search
+├── memory.ts            # conversation turns, keyed by conversationId
+└── mcp.ts                # connects an agent's mcpServers, merges their tools in
 agents/               # <name>.yaml (+ optional <name>.hooks.ts)
 tools/                # shared AI SDK tool() definitions, importable from any hooks.ts
+mcp-servers/          # demo-time: a keyless local MCP server proving v2.4's client support
 docs/                 # deep reference per feature — see docs/ links above
 toolbar-app/          # macOS menu bar app (Swift/SwiftUI) to start/stop/status Homebase — separate tech stack
+data/                 # gitignored — homebase.db (RAG + memory storage), created on first use
 ```
 
 ## Scripts
@@ -161,4 +172,5 @@ toolbar-app/          # macOS menu bar app (Swift/SwiftUI) to start/stop/status 
 npm run dev        # start with auto-reload
 npm run typecheck  # tsc --noEmit
 npm run build       # compile to dist/
+npm run mcp:demo    # start the demo MCP server (docs/mcp.md)
 ```

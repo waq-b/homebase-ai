@@ -6,15 +6,18 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "mcp:demo": "tsx watch mcp-servers/demo-time/server.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@scalar/hono-api-reference": "^0.11.13",
     "ai": "^4.3.19",
     "hono": "^4.6.0",
     "js-yaml": "^4.1.0",
     "ollama-ai-provider": "^1.2.0",
+    "sqlite-vec": "^0.1.9",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.25.2"
   },
