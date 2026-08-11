@@ -1,0 +1,9 @@
+name: shout
+description: Demo agent proving beforeInvoke/afterInvoke hooks run
+provider: ollama
+model: llama3:latest
+system: |
+  Reply with a short, plain sentence. No markdown.
+input:
+  type: string
+hooks: ./shout.hooks.ts

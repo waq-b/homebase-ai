@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import { agentConfigSchema, type AgentConfig } from "./config.js";
 
-const AGENTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "agents");
+export const AGENTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "agents");
 
 export class AgentConfigError extends Error {
   constructor(
