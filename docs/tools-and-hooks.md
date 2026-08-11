@@ -17,7 +17,7 @@ All three keys are optional (`AgentHooks` in `src/hooks.ts`) — an agent with n
 
 `loadHooks()` dynamically `import()`s the file referenced by the agent's `hooks:` path (relative to the YAML file, resolved against `AGENTS_DIR`) on every invoke — same re-read-per-request model as the YAML registry.
 
-`InvokeContext` currently exposes just `{ agent: AgentConfig }` — the full parsed config of the agent being invoked, so a hook can branch on `ctx.agent.name`, `ctx.agent.model`, etc.
+`InvokeContext` exposes `{ agent: AgentConfig, input?: unknown }` — the full parsed config of the agent being invoked (so a hook can branch on `ctx.agent.name`, `ctx.agent.model`, etc.), plus the request's (possibly `beforeInvoke`-modified) input. `ctx.input` is set once in `invoke.ts`'s `prepare()`, right after `beforeInvoke` resolves — so it's available in `afterInvoke` too, even though `afterInvoke` itself only receives the model's output as its first argument.
 
 ### `beforeInvoke(input, ctx)`
 
@@ -26,6 +26,8 @@ Runs after input validation, before the input is turned into model messages. Ret
 ### `afterInvoke(output, ctx)`
 
 Runs on the model's full text output, **plain (non-streaming) path only** — see `docs/invoke.md` for why streaming skips it. Return value replaces the response's `output` field.
+
+**Pattern: deterministic backstop for a constraint the model won't reliably follow.** Small local models don't always comply with hard constraints from prompting alone, even with an explicit rule and a worked example — `agents/manga-recommend.hooks.ts` is a live example: the system prompt tells the model to never output a candidate already in the user's reading list, but that alone measured 0/8 compliance on a repeatable test case. Rather than keep tuning the prompt, `afterInvoke` parses the model's JSON output (using `ctx.input` to see the original `readingList`) and deterministically strips any match — the model still does the actual ranking/scoring, the hook just guarantees the hard constraint holds regardless of what the model does. Worth reaching for whenever a constraint is easy to check in code but unreliable to enforce purely through prompting.
 
 ### `tools`
 
@@ -49,10 +51,13 @@ Two behavioral consequences of declaring `tools`, both driven from `src/provider
 
 ```
 tools/
-└── webSearch.ts   # one file per tool, each exporting an AI SDK tool() definition
+├── webSearch.ts           # generic DuckDuckGo-backed search — agents/researcher.yaml
+└── mangaMetadataSearch.ts # manga/manhwa/manhua metadata (MangaDex + AniList) — agents/manga-search.yaml
 ```
 
-Any agent's `hooks.ts` can import any file in `tools/` — there's no per-agent tool registration beyond the import. `tools/webSearch.ts` is the reference example: a DuckDuckGo Instant-Answer-API-backed search tool, no API key required.
+Any agent's `hooks.ts` can import any file in `tools/` — there's no per-agent tool registration beyond the import.
+
+`tools/webSearch.ts`: a DuckDuckGo Instant-Answer-API-backed search tool, no API key required.
 
 ```ts
 export const webSearch = tool({
@@ -62,7 +67,9 @@ export const webSearch = tool({
 });
 ```
 
-**Known limitation:** DuckDuckGo's Instant Answer API is sparse for anything outside broad encyclopedic topics (it often returns no abstract text for niche or specific queries, and never returns a source URL). Agents relying on it for grounding — e.g. `manga-search` — will correctly return empty/no-results rather than hallucinate when the API comes back empty, but real-world result quality is capped by this backend. Worth revisiting with a stronger search tool if grounding quality becomes a blocker for a given agent.
+**Known limitation:** DuckDuckGo's Instant Answer API is sparse for anything outside broad encyclopedic topics (it often returns no abstract text for niche or specific queries, and never returns a source URL) — and its HTML search endpoint (a tempting keyless alternative) hard-blocks with a 403 after a single request, so it's not a viable swap either. Fine for `researcher`'s demo purpose; **not** a good fit for anything needing real, domain-specific grounding — see `tools/mangaMetadataSearch.ts` below for how `manga-search` moved off it.
+
+**`tools/mangaMetadataSearch.ts`**: purpose-built replacement for `manga-search`, after `webSearch` was confirmed both non-functional (DuckDuckGo returning empty responses in practice) and a poor fit even when working (no manga/anime awareness). Tries [MangaDex](https://api.mangadex.org) first — the strongest niche/indie coverage of the keyless options evaluated — falling back to [AniList](https://graphql.anilist.co)'s GraphQL API if MangaDex has no results. Both sources' differing status vocabularies (`ongoing`/`hiatus`/... vs `RELEASING`/`HIATUS`/...) are normalized inside the tool, so the calling agent's system prompt doesn't need to know which backend actually answered. A good template for "generic tool doesn't fit this agent's domain" — build (or find) a purpose-built one instead of stretching the generic tool further.
 
 ## Adding a new tool
 

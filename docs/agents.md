@@ -25,6 +25,7 @@ The registry (`src/registry.ts`) re-reads every `agents/*.yaml` file on every re
 | `params.temperature` | number | no | Forwarded to the AI SDK call. |
 | `params.maxTokens` | number | no | Forwarded to the AI SDK call. |
 | `hooks` | string | no | Relative path (from the YAML file) to a `.hooks.ts` module. |
+| `mcpServers` | `{ name, url }[]` | no | External MCP servers whose tools merge with `hooks.ts` tools. See `docs/mcp.md`. |
 
 ## Input types
 
