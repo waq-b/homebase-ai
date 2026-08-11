@@ -53,20 +53,84 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
           required: true,
           content: {
             "application/json": {
-              schema: { type: "object", required: ["text"], properties: { text: { type: "string" } } },
+              schema: {
+                type: "object",
+                required: ["text"],
+                properties: {
+                  text: { type: "string" },
+                  metadata: {
+                    description: "Arbitrary JSON, e.g. { genre: \"action\" } — filterable via search's `filter`",
+                  },
+                  model: {
+                    type: "string",
+                    description:
+                      "Only meaningful the first time this KB name is used — fixes that KB's embedding model/dimension from then on",
+                  },
+                },
+              },
             },
           },
         },
         responses: {
-          "200": { description: "{ chunksAdded: number }" },
-          "400": { description: "Invalid input" },
+          "200": { description: "{ documentId: number, chunksAdded: number, embeddingModel: string }" },
+          "400": { description: "Invalid input, or KB already uses a different embedding model" },
           "502": { description: "Provider failure" },
+        },
+      },
+      get: {
+        summary: "List documents in a knowledge base",
+        tags: ["RAG"],
+        parameters: [{ name: "name", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": {
+            description: "{ documents: { id, metadata, createdAt, updatedAt, chunkCount }[] }",
+          },
+        },
+      },
+    },
+    "/kb/{name}/documents/{documentId}": {
+      put: {
+        summary: "Re-sync a document — replace its text (re-chunked + re-embedded) and/or its metadata",
+        tags: ["RAG"],
+        parameters: [
+          { name: "name", in: "path", required: true, schema: { type: "string" } },
+          { name: "documentId", in: "path", required: true, schema: { type: "integer" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                description: "At least one of text or metadata is required",
+                properties: { text: { type: "string" }, metadata: {} },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "{ documentId: number, chunksAdded: number }" },
+          "400": { description: "Invalid input" },
+          "404": { description: "KB or document not found" },
+          "502": { description: "Provider failure" },
+        },
+      },
+      delete: {
+        summary: "Delete a document (and its chunks/embeddings) from a knowledge base",
+        tags: ["RAG"],
+        parameters: [
+          { name: "name", in: "path", required: true, schema: { type: "string" } },
+          { name: "documentId", in: "path", required: true, schema: { type: "integer" } },
+        ],
+        responses: {
+          "200": { description: "{ deleted: true }" },
+          "404": { description: "KB or document not found" },
         },
       },
     },
     "/kb/{name}/search": {
       post: {
-        summary: "Similarity search within a knowledge base",
+        summary: "Similarity search within a knowledge base, with optional metadata filtering",
         tags: ["RAG"],
         parameters: [{ name: "name", in: "path", required: true, schema: { type: "string" } }],
         requestBody: {
@@ -79,14 +143,21 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
                 properties: {
                   query: { type: "string" },
                   topK: { type: "integer", description: "Defaults to 5" },
+                  filter: {
+                    type: "object",
+                    description: "Exact-match metadata filter, e.g. { genre: \"action\" }",
+                  },
                 },
               },
             },
           },
         },
         responses: {
-          "200": { description: "{ results: { content, score, chunkIndex }[] }" },
+          "200": {
+            description: "{ results: { content, score, chunkIndex, documentId, metadata }[] }",
+          },
           "400": { description: "Invalid input" },
+          "404": { description: "KB not found" },
           "502": { description: "Provider failure" },
         },
       },

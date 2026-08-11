@@ -8,7 +8,17 @@ import { HookError } from "./hooks.js";
 import { InputValidationError, ProviderError, invokeAgent, invokeAgentStream } from "./invoke.js";
 import { buildOpenApiSpec } from "./openapi.js";
 import { embedText } from "./embeddings.js";
-import { addDocument, searchKb } from "./rag.js";
+import {
+  addDocument,
+  deleteDocument,
+  DocumentNotFoundError,
+  KbModelMismatchError,
+  KbNotFoundError,
+  listDocuments,
+  searchKb,
+  updateDocument,
+} from "./rag.js";
+import { InvalidKbNameError } from "./db.js";
 import { clearConversation, getConversationTurns } from "./memory.js";
 
 const app = new Hono();
@@ -136,17 +146,73 @@ app.post("/embed", async (c) => {
 });
 
 // v2.2 — Homebase-hosted RAG: named knowledge bases, chunk+embed on ingest, similarity search on query.
+const mapRagError = (c: Context, err: unknown, fallbackMessage: string) => {
+  if (err instanceof KbNotFoundError || err instanceof DocumentNotFoundError) {
+    return c.json({ error: err.message }, 404);
+  }
+  if (err instanceof KbModelMismatchError || err instanceof InvalidKbNameError) {
+    return c.json({ error: err.message }, 400);
+  }
+  return c.json({ error: err instanceof Error ? err.message : fallbackMessage }, 502);
+};
+
 app.post("/kb/:name/documents", async (c) => {
   const parsedBody = await readJsonBody(c);
   if (!parsedBody.ok) return badJson(c);
 
-  const parsed = z.object({ text: z.string().min(1) }).safeParse(parsedBody.body);
+  const parsed = z
+    .object({ text: z.string().min(1), metadata: z.unknown().optional(), model: z.string().optional() })
+    .safeParse(parsedBody.body);
   if (!parsed.success) return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400);
 
   try {
-    return c.json(await addDocument(c.req.param("name"), parsed.data.text));
+    const result = await addDocument(c.req.param("name"), parsed.data.text, {
+      metadata: parsed.data.metadata,
+      model: parsed.data.model,
+    });
+    return c.json(result);
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : "Embedding failed" }, 502);
+    return mapRagError(c, err, "Embedding failed");
+  }
+});
+
+app.get("/kb/:name/documents", (c) => {
+  return c.json({ documents: listDocuments(c.req.param("name")) });
+});
+
+app.put("/kb/:name/documents/:documentId", async (c) => {
+  const documentId = Number(c.req.param("documentId"));
+  if (!Number.isInteger(documentId)) {
+    return c.json({ error: "documentId must be an integer" }, 400);
+  }
+
+  const parsedBody = await readJsonBody(c);
+  if (!parsedBody.ok) return badJson(c);
+
+  const parsed = z
+    .object({ text: z.string().min(1).optional(), metadata: z.unknown().optional() })
+    .safeParse(parsedBody.body);
+  if (!parsed.success) return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400);
+
+  try {
+    const result = await updateDocument(c.req.param("name"), documentId, parsed.data);
+    return c.json(result);
+  } catch (err) {
+    return mapRagError(c, err, "Update failed");
+  }
+});
+
+app.delete("/kb/:name/documents/:documentId", (c) => {
+  const documentId = Number(c.req.param("documentId"));
+  if (!Number.isInteger(documentId)) {
+    return c.json({ error: "documentId must be an integer" }, 400);
+  }
+
+  try {
+    deleteDocument(c.req.param("name"), documentId);
+    return c.json({ deleted: true });
+  } catch (err) {
+    return mapRagError(c, err, "Delete failed");
   }
 });
 
@@ -155,15 +221,22 @@ app.post("/kb/:name/search", async (c) => {
   if (!parsedBody.ok) return badJson(c);
 
   const parsed = z
-    .object({ query: z.string().min(1), topK: z.number().int().positive().optional() })
+    .object({
+      query: z.string().min(1),
+      topK: z.number().int().positive().optional(),
+      filter: z.record(z.unknown()).optional(),
+    })
     .safeParse(parsedBody.body);
   if (!parsed.success) return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400);
 
   try {
-    const results = await searchKb(c.req.param("name"), parsed.data.query, parsed.data.topK);
+    const results = await searchKb(c.req.param("name"), parsed.data.query, {
+      topK: parsed.data.topK,
+      filter: parsed.data.filter,
+    });
     return c.json({ results });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : "Search failed" }, 502);
+    return mapRagError(c, err, "Search failed");
   }
 });
 
