@@ -38,9 +38,9 @@ struct StatusIcon: View {
     let status: HomebaseController.Status
 
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 10, height: 10)
+        Image(systemName: "star.fill")
+            .renderingMode(.original)
+            .foregroundStyle(color)
     }
 
     private var color: Color {
