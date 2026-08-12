@@ -31,5 +31,12 @@ struct HomebaseBarApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+
+        // LSUIElement (menu-bar-only, no Dock icon, no windows) makes macOS's
+        // Automatic Termination treat this as an idle background app and
+        // silently kill it after a while — no crash, no log beyond a clean
+        // "appDeath". This app manages long-running child processes the user
+        // expects to stay up, so it must never be auto-terminated.
+        ProcessInfo.processInfo.disableAutomaticTermination("Manages long-running Homebase/mangaFinder child processes")
     }
 }
