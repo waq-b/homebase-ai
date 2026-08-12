@@ -30,8 +30,15 @@ export class HookError extends Error {
 export const loadHooks = async (agent: AgentConfig): Promise<AgentHooks> => {
   if (!agent.hooks) return {};
   const hooksPath = path.join(AGENTS_DIR, agent.hooks);
-  const mod = await import(pathToFileURL(hooksPath).href);
-  return (mod.default ?? {}) as AgentHooks;
+  try {
+    const mod = await import(pathToFileURL(hooksPath).href);
+    return (mod.default ?? {}) as AgentHooks;
+  } catch (err) {
+    // A syntax/runtime error in the hooks file itself (not a thrown hook
+    // call) — reuses HookError so this surfaces as the same clean 500 as
+    // any other hook failure, instead of an unhandled exception.
+    throw new HookError("load", err);
+  }
 };
 
 export const runHook = async <T>(

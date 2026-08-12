@@ -18,6 +18,23 @@ Tables (`src/db.ts`):
 - `kb_chunks` — `(id, document_id, kb_name, chunk_index, content, created_at)`, one row per chunk
 - `kb_vec_<name>` — one `vec0` virtual table per KB, `rowid` matching `kb_chunks.id`
 
+## List / delete knowledge bases
+
+```bash
+curl localhost:3000/kb
+```
+
+```json
+{ "kbs": [{ "name": "manga-kb", "embeddingModel": "nomic-embed-text", "dimension": 768, "documentCount": 12, "chunkCount": 34 }] }
+```
+
+```bash
+curl -X DELETE localhost:3000/kb/manga-kb
+# { "deleted": true }
+```
+
+Drops the KB's dedicated vector table, every document/chunk row, and its `kb_config` entry — the whole KB, not just one document (see "Delete a document" below for that). `404` if the KB doesn't exist. Deleting one KB never touches any other.
+
 ## Add a document
 
 ```bash

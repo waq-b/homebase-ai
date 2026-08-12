@@ -10,7 +10,9 @@ agents/
 └── my-agent.hooks.ts     # optional — beforeInvoke/afterInvoke/tools
 ```
 
-The registry (`src/registry.ts`) re-reads every `agents/*.yaml` file on every request — no caching, no server restart needed to add/edit an agent. A malformed YAML file throws `AgentConfigError` and is reported with the offending filename and Zod validation details.
+The registry (`src/registry.ts`) re-reads every `agents/*.yaml` file on every request — no caching, no server restart needed to add/edit an agent.
+
+**A malformed YAML file is isolated to itself** — it's skipped (logged server-side as `Skipping invalid agent config: ...`) rather than aborting the whole registry load, so one broken agent doesn't take `GET /agents`, `GET /openapi.json`/`/docs`, or any *other* agent's `/invoke` down with it. Invoking the broken agent by its own name (matched by the `agents/<name>.yaml` filename convention) returns a `500` with the real Zod validation details; invoking any other agent, or listing agents, works normally. A broken `*.hooks.ts` file behaves the same way at invoke time — only that agent's calls fail, as a `500` (`HookError`), everything else is unaffected.
 
 ## Top-level fields
 

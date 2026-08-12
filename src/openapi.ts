@@ -49,6 +49,28 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
         },
       },
     },
+    "/kb": {
+      get: {
+        summary: "List all knowledge bases",
+        tags: ["RAG"],
+        responses: {
+          "200": {
+            description: "{ kbs: { name, embeddingModel, dimension, documentCount, chunkCount }[] }",
+          },
+        },
+      },
+    },
+    "/kb/{name}": {
+      delete: {
+        summary: "Delete a knowledge base entirely — its vector table, all documents/chunks, and its config",
+        tags: ["RAG"],
+        parameters: [{ name: "name", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "{ deleted: true }" },
+          "404": { description: "KB not found" },
+        },
+      },
+    },
     "/kb/{name}/documents": {
       post: {
         summary: "Add a document to a knowledge base (chunked + embedded automatically)",

@@ -19,7 +19,9 @@ Only the `sse` MCP transport is supported (the AI SDK's built-in `experimental_c
 
 ## How it works
 
-`connectMcpServers()` (`src/mcp.ts`) connects to every declared server **at invoke time** — per request, matching the rest of Homebase's re-read-everything-per-request model (same philosophy as the YAML registry). Connections are closed again once the model call finishes (`mcpClose()` in `src/invoke.ts`, called after `generateText` resolves, or in `streamText`'s `onFinish` for the streaming path).
+`connectMcpServers()` (`src/mcp.ts`) connects to every declared server **at invoke time** — per request, matching the rest of Homebase's re-read-everything-per-request model (same philosophy as the YAML registry). Connections are closed again once the model call finishes (`mcpClose()` in `src/invoke.ts`, called after `generateText` resolves on the plain path, or in a `finally` around stream consumption on the streaming path — guaranteed exactly once even if the stream errors or the client disconnects before finishing).
+
+**If any declared server fails to connect**, the whole invoke fails with a `502` (`McpConnectionError`, naming which server) rather than silently dropping that server's tools — any *other* servers in the same `mcpServers` list that *did* connect successfully are still closed before the error propagates, so a partial failure doesn't leak those connections. If `beforeInvoke` throws after MCP servers already connected, those connections are also closed before the error surfaces.
 
 This means: no persistent connection pool, and a fresh MCP round trip on every single invoke. Fine for v1 given MCP is the lowest-priority/least-urgent piece of the v2 epic — revisit (e.g. connection pooling keyed by server URL) if latency becomes a real problem for an MCP-tool-heavy agent.
 

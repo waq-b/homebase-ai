@@ -3,18 +3,21 @@ import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { Scalar } from "@scalar/hono-api-reference";
 import { z } from "zod";
-import { AgentConfigError, getAgent, loadAgents } from "./registry.js";
+import { loadAgents, loadAgentsDetailed } from "./registry.js";
 import { HookError } from "./hooks.js";
 import { InputValidationError, ProviderError, invokeAgent, invokeAgentStream } from "./invoke.js";
+import { McpConnectionError } from "./mcp.js";
 import { buildOpenApiSpec } from "./openapi.js";
 import { embedText, embedTexts } from "./embeddings.js";
 import {
   addDocument,
   deleteDocument,
+  deleteKb,
   DocumentNotFoundError,
   KbModelMismatchError,
   KbNotFoundError,
   listDocuments,
+  listKbs,
   searchKb,
   updateDocument,
 } from "./rag.js";
@@ -25,22 +28,18 @@ const app = new Hono();
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+// loadAgents() skips (and logs) any agent whose YAML fails validation rather
+// than throwing — so these two routes can't be taken down by one broken
+// config; the broken agent just doesn't appear.
 app.get("/agents", async (c) => {
-  try {
-    const agents = await loadAgents();
-    return c.json(
-      agents.map((agent) => ({
-        name: agent.name,
-        description: agent.description,
-        input: agent.input.type,
-      })),
-    );
-  } catch (err) {
-    if (err instanceof AgentConfigError) {
-      return c.json({ error: err.message }, 500);
-    }
-    throw err;
-  }
+  const agents = await loadAgents();
+  return c.json(
+    agents.map((agent) => ({
+      name: agent.name,
+      description: agent.description,
+      input: agent.input.type,
+    })),
+  );
 });
 
 app.get("/openapi.json", async (c) => {
@@ -70,13 +69,26 @@ const mapInvokeError = (c: Context, err: unknown) => {
   if (err instanceof ProviderError) {
     return c.json({ error: err.message }, 502);
   }
+  if (err instanceof McpConnectionError) {
+    return c.json({ error: err.message }, 502);
+  }
   throw err;
 };
 
 app.post("/agents/:name/invoke", async (c) => {
-  const agent = await getAgent(c.req.param("name"));
+  const name = c.req.param("name");
+  const { agents, errors } = await loadAgentsDetailed();
+  const agent = agents.find((a) => a.name === name);
+
   if (!agent) {
-    return c.json({ error: `Unknown agent: ${c.req.param("name")}` }, 404);
+    // Give a real answer instead of a misleading 404 when the requested
+    // agent exists but its own YAML is what's broken (matched by Homebase's
+    // agents/<name>.yaml filename convention).
+    const ownError = errors.find((e) => e.file.replace(/\.ya?ml$/, "") === name);
+    if (ownError) {
+      return c.json({ error: ownError.message }, 500);
+    }
+    return c.json({ error: `Unknown agent: ${name}` }, 404);
   }
 
   const parsedBody = await readJsonBody(c);
@@ -92,12 +104,13 @@ app.post("/agents/:name/invoke", async (c) => {
     }
   }
 
-  let result: Awaited<ReturnType<typeof invokeAgentStream>>;
+  let invoked: Awaited<ReturnType<typeof invokeAgentStream>>;
   try {
-    result = await invokeAgentStream(agent, body);
+    invoked = await invokeAgentStream(agent, body);
   } catch (err) {
     return mapInvokeError(c, err);
   }
+  const { result, mcpClose } = invoked;
 
   return streamSSE(c, async (sse) => {
     try {
@@ -126,6 +139,11 @@ app.post("/agents/:name/invoke", async (c) => {
       await sse.writeSSE({
         data: JSON.stringify({ error: err instanceof Error ? err.message : "Stream failed" }),
       });
+    } finally {
+      // Guaranteed exactly once here regardless of success/error/early
+      // client disconnect — the stream loop above has always exited by the
+      // time we reach this, so no in-flight tool call gets cut off.
+      await mcpClose();
     }
   });
 });
@@ -168,6 +186,19 @@ const mapRagError = (c: Context, err: unknown, fallbackMessage: string) => {
   }
   return c.json({ error: err instanceof Error ? err.message : fallbackMessage }, 502);
 };
+
+app.get("/kb", (c) => {
+  return c.json({ kbs: listKbs() });
+});
+
+app.delete("/kb/:name", (c) => {
+  try {
+    deleteKb(c.req.param("name"));
+    return c.json({ deleted: true });
+  } catch (err) {
+    return mapRagError(c, err, "Delete failed");
+  }
+});
 
 app.post("/kb/:name/documents", async (c) => {
   const parsedBody = await readJsonBody(c);
@@ -273,6 +304,15 @@ app.get("/memory/:conversationId", (c) => {
 
 app.delete("/memory/:conversationId", (c) => {
   return c.json({ cleared: clearConversation(c.req.param("conversationId")) });
+});
+
+// Last-resort fallback — every route above maps its own known error types to
+// the documented { error } shape; this only catches whatever still slips
+// through (a genuinely unexpected bug), so it doesn't leak Hono's default
+// (non-JSON) error response or a raw stack trace.
+app.onError((err, c) => {
+  console.error(err);
+  return c.json({ error: err instanceof Error ? err.message : "Internal error" }, 500);
 });
 
 const port = Number(process.env.PORT ?? 3000);

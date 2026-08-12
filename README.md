@@ -15,12 +15,14 @@ This README covers quickstart/getting started. For deep reference on any feature
 
 ## Quickstart
 
-Requires a local [Ollama](https://ollama.com) server with at least one chat model pulled (e.g. `ollama pull llama3`). RAG/embeddings also need an embedding model — `ollama pull nomic-embed-text` (see `docs/embeddings.md`).
+Requires **Node 22.5+** (`node:sqlite`, used by RAG/memory storage — see `docs/rag.md` — was added experimentally in that release; developed and tested against Node 24.x, so prefer that or later if you hit issues on an older 22.x point release, particularly around `sqlite-vec` extension loading). Also requires a local [Ollama](https://ollama.com) server with at least one chat model pulled (e.g. `ollama pull llama3`). RAG/embeddings also need an embedding model — `ollama pull nomic-embed-text` (see `docs/embeddings.md`).
 
 ```bash
 npm install
 npm run dev
 ```
+
+No `.env` needed to get started — see `.env.example` for the three overridable settings (`OLLAMA_BASE_URL`, `EMBEDDING_MODEL`, `PORT`), all optional with working defaults.
 
 This starts the server at `http://localhost:3000`. Confirm it's up:
 

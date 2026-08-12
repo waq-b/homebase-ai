@@ -6,6 +6,15 @@ export interface McpConnection {
   close: () => Promise<void>;
 }
 
+export class McpConnectionError extends Error {
+  constructor(serverName: string, cause: unknown) {
+    super(
+      `Failed to connect to MCP server "${serverName}": ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    this.name = "McpConnectionError";
+  }
+}
+
 const NO_MCP_TOOLS: McpConnection = { tools: {}, close: async () => {} };
 
 /**
@@ -25,11 +34,22 @@ export const connectMcpServers = async (
   const servers = agent.mcpServers;
   if (!servers || servers.length === 0) return NO_MCP_TOOLS;
 
-  const clients = await Promise.all(
+  // Promise.allSettled (not .all) — one server failing to connect must not
+  // leak any siblings in the same batch that *did* connect successfully.
+  const settled = await Promise.allSettled(
     servers.map((server) =>
       createMCPClient({ name: server.name, transport: { type: "sse", url: server.url } }),
     ),
   );
+
+  const clients = settled.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+
+  const failedIndex = settled.findIndex((result) => result.status === "rejected");
+  if (failedIndex !== -1) {
+    await Promise.all(clients.map((client) => client.close().catch(() => {})));
+    const failure = settled[failedIndex] as PromiseRejectedResult;
+    throw new McpConnectionError(servers[failedIndex].name, failure.reason);
+  }
 
   const toolSets = await Promise.all(clients.map((client) => client.tools()));
   const tools: ToolSet = Object.assign({}, ...toolSets);
@@ -37,7 +57,7 @@ export const connectMcpServers = async (
   return {
     tools,
     close: async () => {
-      await Promise.all(clients.map((client) => client.close()));
+      await Promise.all(clients.map((client) => client.close().catch(() => {})));
     },
   };
 };

@@ -76,6 +76,31 @@ export const getKbConfig = (kbName: string): KbConfig | undefined => {
   };
 };
 
+export interface KbSummary {
+  name: string;
+  embeddingModel: string;
+  dimension: number;
+  documentCount: number;
+  chunkCount: number;
+}
+
+export const listKbs = (): KbSummary[] => {
+  const rows = getDb()
+    .prepare(
+      `SELECT kb_config.kb_name as name, kb_config.embedding_model as embeddingModel,
+              kb_config.dimension as dimension,
+              COUNT(DISTINCT kb_documents.id) as documentCount,
+              COUNT(kb_chunks.id) as chunkCount
+       FROM kb_config
+       LEFT JOIN kb_documents ON kb_documents.kb_name = kb_config.kb_name
+       LEFT JOIN kb_chunks ON kb_chunks.document_id = kb_documents.id
+       GROUP BY kb_config.kb_name
+       ORDER BY kb_config.kb_name ASC`,
+    )
+    .all() as unknown as KbSummary[];
+  return rows;
+};
+
 const createKbConfig = (kbName: string, embeddingModel: string, dimension: number): KbConfig => {
   const vectorTable = `kb_vec_${sanitizeKbName(kbName).replace(/-/g, "_")}`;
   const db = getDb();
@@ -105,6 +130,26 @@ export interface AddDocumentResult {
  * switch models without corrupting the table shape. Pass `model` to choose
  * it up front for a brand-new KB; omit to use the default.
  */
+/** Shared by addDocument/updateDocument — inserts each chunk's row + its vector, in lockstep with `vectors[i]`. */
+const insertChunks = (
+  kb: KbConfig,
+  kbName: string,
+  documentId: number,
+  chunks: string[],
+  vectors: number[][],
+): void => {
+  const db = getDb();
+  const insertChunk = db.prepare(
+    "INSERT INTO kb_chunks (document_id, kb_name, chunk_index, content) VALUES (?, ?, ?, ?)",
+  );
+  const insertVector = db.prepare(`INSERT INTO "${kb.vectorTable}" (rowid, embedding) VALUES (?, ?)`);
+
+  for (const [index, chunk] of chunks.entries()) {
+    const chunkInfo = insertChunk.run(documentId, kbName, index, chunk);
+    insertVector.run(BigInt(chunkInfo.lastInsertRowid), toVectorBlob(vectors[index]));
+  }
+};
+
 export const addDocument = async (
   kbName: string,
   text: string,
@@ -127,21 +172,12 @@ export const addDocument = async (
   const { vectors } = await embedTexts(chunks, modelId);
   const kb = existing ?? createKbConfig(kbName, modelId, vectors[0].length);
 
-  const db = getDb();
-  const documentInfo = db
+  const documentInfo = getDb()
     .prepare("INSERT INTO kb_documents (kb_name, metadata) VALUES (?, ?)")
     .run(kbName, options.metadata !== undefined ? JSON.stringify(options.metadata) : null);
   const documentId = Number(documentInfo.lastInsertRowid);
 
-  const insertChunk = db.prepare(
-    "INSERT INTO kb_chunks (document_id, kb_name, chunk_index, content) VALUES (?, ?, ?, ?)",
-  );
-  const insertVector = db.prepare(`INSERT INTO "${kb.vectorTable}" (rowid, embedding) VALUES (?, ?)`);
-
-  for (const [index, chunk] of chunks.entries()) {
-    const chunkInfo = insertChunk.run(documentId, kbName, index, chunk);
-    insertVector.run(BigInt(chunkInfo.lastInsertRowid), toVectorBlob(vectors[index]));
-  }
+  insertChunks(kb, kbName, documentId, chunks, vectors);
 
   return { documentId, chunksAdded: chunks.length, embeddingModel: modelId };
 };
@@ -200,16 +236,7 @@ export const updateDocument = async (
 
     const chunks = chunkText(options.text);
     const { vectors } = await embedTexts(chunks, kb.embeddingModel);
-
-    const insertChunk = db.prepare(
-      "INSERT INTO kb_chunks (document_id, kb_name, chunk_index, content) VALUES (?, ?, ?, ?)",
-    );
-    const insertVector = db.prepare(`INSERT INTO "${kb.vectorTable}" (rowid, embedding) VALUES (?, ?)`);
-
-    for (const [index, chunk] of chunks.entries()) {
-      const chunkInfo = insertChunk.run(documentId, kbName, index, chunk);
-      insertVector.run(BigInt(chunkInfo.lastInsertRowid), toVectorBlob(vectors[index]));
-    }
+    insertChunks(kb, kbName, documentId, chunks, vectors);
     chunksAdded = chunks.length;
   }
 
@@ -232,6 +259,20 @@ export const deleteDocument = (kbName: string, documentId: number): void => {
 
   deleteDocumentChunks(kb, documentId);
   getDb().prepare("DELETE FROM kb_documents WHERE id = ?").run(documentId);
+};
+
+/** Drops a KB entirely — its dedicated vec0 table, every document/chunk row, and its kb_config row. */
+export const deleteKb = (kbName: string): void => {
+  const kb = getKbConfig(kbName);
+  if (!kb) throw new KbNotFoundError(kbName);
+
+  const db = getDb();
+  db.exec(`DROP TABLE IF EXISTS "${kb.vectorTable}"`);
+  db.prepare(
+    "DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE kb_name = ?)",
+  ).run(kbName);
+  db.prepare("DELETE FROM kb_documents WHERE kb_name = ?").run(kbName);
+  db.prepare("DELETE FROM kb_config WHERE kb_name = ?").run(kbName);
 };
 
 export interface DocumentSummary {

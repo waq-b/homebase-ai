@@ -16,31 +16,45 @@ export class AgentConfigError extends Error {
   }
 }
 
-/** Reads and validates every agents/*.yaml file from disk. Re-read on every call — no caching. */
-export const loadAgents = async (): Promise<AgentConfig[]> => {
+export interface AgentLoadResult {
+  agents: AgentConfig[];
+  errors: AgentConfigError[];
+}
+
+/**
+ * Reads and validates every agents/*.yaml file from disk. Re-read on every
+ * call — no caching. A malformed file is skipped and reported in `errors`
+ * rather than aborting the whole load — one broken agent config shouldn't
+ * take every other agent (and /openapi.json, /docs) down with it.
+ */
+export const loadAgentsDetailed = async (): Promise<AgentLoadResult> => {
   let files: string[];
   try {
     files = await readdir(AGENTS_DIR);
   } catch {
-    return [];
+    return { agents: [], errors: [] };
   }
 
   const yamlFiles = files.filter((file) => file.endsWith(".yaml") || file.endsWith(".yml"));
 
   const agents: AgentConfig[] = [];
+  const errors: AgentConfigError[] = [];
   for (const file of yamlFiles) {
     const raw = await readFile(path.join(AGENTS_DIR, file), "utf-8");
     const parsed = yaml.load(raw);
     const result = agentConfigSchema.safeParse(parsed);
     if (!result.success) {
-      throw new AgentConfigError(file, result.error.message);
+      const error = new AgentConfigError(file, result.error.message);
+      errors.push(error);
+      console.error(`Skipping invalid agent config: ${error.message}`);
+      continue;
     }
     agents.push(result.data);
   }
-  return agents;
+  return { agents, errors };
 };
 
-export const getAgent = async (name: string): Promise<AgentConfig | undefined> => {
-  const agents = await loadAgents();
-  return agents.find((agent) => agent.name === name);
+export const loadAgents = async (): Promise<AgentConfig[]> => {
+  const { agents } = await loadAgentsDetailed();
+  return agents;
 };

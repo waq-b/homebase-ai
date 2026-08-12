@@ -53,7 +53,15 @@ const prepare = async (agent: AgentConfig, rawBody: unknown) => {
   const tools: ToolSet = { ...hooks.tools, ...mcp.tools };
 
   const ctx: InvokeContext = { agent };
-  const input = await runHook("beforeInvoke", hooks.beforeInvoke, parsed.data.input, ctx);
+  let input: unknown;
+  try {
+    input = await runHook("beforeInvoke", hooks.beforeInvoke, parsed.data.input, ctx);
+  } catch (err) {
+    // beforeInvoke throwing here would otherwise skip mcp.close() entirely —
+    // prepare() never gets to return it to the caller.
+    await mcp.close();
+    throw err;
+  }
   ctx.input = input;
 
   const conversationId = extractConversationId(rawBody);
@@ -114,19 +122,25 @@ export const invokeAgent = async (agent: AgentConfig, rawBody: unknown): Promise
  * Runs an agent for SSE streaming, with tool-calling if the agent defines
  * tools. afterInvoke does not apply here — tokens are already flushed to
  * the client by the time the full text is known.
+ *
+ * Returns `mcpClose` alongside the stream result (rather than closing it
+ * from an `onFinish` callback here) so the caller can guarantee it's called
+ * exactly once in a `finally` around stream consumption — `onFinish` never
+ * fires if the stream errors or the client disconnects before it completes,
+ * which used to leak the MCP connection in that case.
  */
 export const invokeAgentStream = async (agent: AgentConfig, rawBody: unknown) => {
   const { tools, mcpClose, messages, conversationId, newTurns } = await prepare(agent, rawBody);
 
   try {
-    return streamText({
+    const result = streamText({
       ...callSettings(agent, tools),
       messages,
-      onFinish: async ({ text }) => {
+      onFinish: ({ text }) => {
         if (conversationId) persistTurns(conversationId, newTurns, text);
-        await mcpClose();
       },
     });
+    return { result, mcpClose };
   } catch (err) {
     await mcpClose();
     throw new ProviderError(err instanceof Error ? err.message : "Model call failed", err);
