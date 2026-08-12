@@ -29,6 +29,22 @@ Runs on the model's full text output, **plain (non-streaming) path only** — se
 
 **Pattern: deterministic backstop for a constraint the model won't reliably follow.** Small local models don't always comply with hard constraints from prompting alone, even with an explicit rule and a worked example — `agents/manga-recommend.hooks.ts` is a live example: the system prompt tells the model to never output a candidate already in the user's reading list, but that alone measured 0/8 compliance on a repeatable test case. Rather than keep tuning the prompt, `afterInvoke` parses the model's JSON output (using `ctx.input` to see the original `readingList`) and deterministically strips any match — the model still does the actual ranking/scoring, the hook just guarantees the hard constraint holds regardless of what the model does. Worth reaching for whenever a constraint is easy to check in code but unreliable to enforce purely through prompting.
 
+**Pattern: validating a JSON-output agent's shape.** Homebase itself does no schema validation or retry on an agent's raw text output (a deliberate scope decision — see the "structured-output validation" ticket's design doc: no genuine malformed-JSON failure has actually been observed, only semantic ones like the exclusion bug above, which retrying wouldn't fix anyway). If an agent's contract depends on valid JSON matching a specific shape, validate it in `afterInvoke` — parse, check against a Zod schema, throw on failure:
+
+```ts
+const outputSchema = z.array(z.object({ action: z.string(), title: z.string(), /* ... */ }));
+
+export default {
+  afterInvoke: (output: string) => {
+    const parsed = outputSchema.safeParse(JSON.parse(output));
+    if (!parsed.success) throw new Error(`Malformed output: ${parsed.error.message}`);
+    return output;
+  },
+};
+```
+
+A thrown error here becomes a clean `500` (`HookError`) via the existing error-handling path — no retry at the Homebase level; the calling app decides whether/how to retry. This is what mangaFinder's own `parseAgentOutput`/`AgentOutputError` already does client-side, successfully — validating in a Homebase `afterInvoke` hook is the same idea, just movable to whichever side makes sense for a given agent.
+
 ### `tools`
 
 A `ToolSet` (AI SDK's `tool()` map) — real LLM-driven tool-calling, not something a hook invokes manually. The model itself decides whether and when to call a tool, based on its `description` and the conversation so far, up to `MAX_TOOL_STEPS` (5) round trips.
