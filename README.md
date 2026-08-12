@@ -162,7 +162,7 @@ agents/               # <name>.yaml (+ optional <name>.hooks.ts)
 tools/                # shared AI SDK tool() definitions, importable from any hooks.ts
 mcp-servers/          # demo-time: a keyless local MCP server proving v2.4's client support
 docs/                 # deep reference per feature — see docs/ links above
-toolbar-app/          # macOS menu bar app (Swift/SwiftUI) to start/stop/status Homebase — separate tech stack
+toolbar-app/          # macOS menu bar app (Swift/SwiftUI) to start/stop/status Homebase + mangaFinder — separate tech stack
 data/                 # gitignored — homebase.db (RAG + memory storage), created on first use
 ```
 

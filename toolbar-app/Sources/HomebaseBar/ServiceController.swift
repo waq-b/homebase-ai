@@ -1,27 +1,30 @@
 import AppKit
 import Foundation
 
-/// Owns the Homebase child process and polls its health, driving the menu
-/// bar's status and enabling/disabling menu items accordingly.
+/// Owns one managed service's child process and polls its health, driving
+/// that service's menu section (status + enabled/disabled Start/Stop/
+/// Restart/Open). Generalized from a Homebase-only controller once a second
+/// and third service (mangaFinder API + Web) needed the exact same shape.
 @MainActor
-final class HomebaseController: ObservableObject {
+final class ServiceController: ObservableObject, Identifiable {
     enum Status: Equatable {
         case running
         case starting
         case stopped
     }
 
+    let service: ManagedService
+    nonisolated let id: String
     @Published private(set) var status: Status = .stopped
 
-    // Hardcoded for v1 — see v1.5.2 ticket, a settings screen can replace this later.
-    private let repoPath = "~/Projects/homebase"
-    private let baseURL = URL(string: "http://localhost:3000")!
     private let pollInterval: Duration = .seconds(5)
 
     private var process: Process?
     private var pollTask: Task<Void, Never>?
 
-    init() {
+    init(service: ManagedService) {
+        self.service = service
+        self.id = service.id
         pollTask = Task { [weak self] in
             while let self, !Task.isCancelled {
                 await self.refreshStatus()
@@ -39,9 +42,9 @@ final class HomebaseController: ObservableObject {
         status = .starting
 
         let task = Process()
-        task.currentDirectoryURL = URL(fileURLWithPath: repoPath)
+        task.currentDirectoryURL = URL(fileURLWithPath: service.repoPath)
         task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        task.arguments = ["npm", "run", "dev"]
+        task.arguments = service.arguments
         task.terminationHandler = { [weak self] _ in
             Task { @MainActor in
                 self?.process = nil
@@ -72,13 +75,12 @@ final class HomebaseController: ObservableObject {
         }
     }
 
-    func openDocs() {
-        NSWorkspace.shared.open(baseURL.appendingPathComponent("docs"))
+    func open() {
+        NSWorkspace.shared.open(service.openURL)
     }
 
     private func refreshStatus() async {
-        let url = baseURL.appendingPathComponent("agents")
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: service.healthURL)
         request.timeoutInterval = 3
 
         let reachable: Bool

@@ -1,12 +1,28 @@
 import SwiftUI
 
 struct MenuBarContentView: View {
-    @EnvironmentObject private var controller: HomebaseController
+    let controllers: [ServiceController]
 
     var body: some View {
-        Text(statusLabel)
+        ForEach(controllers) { controller in
+            ServiceSection(controller: controller)
+            Divider()
+        }
 
-        Divider()
+        Button("Quit") { NSApplication.shared.terminate(nil) }
+    }
+}
+
+/// One service's block of menu items: status line + Start/Stop/Restart/Open.
+/// `.menuBarExtraStyle(.menu)` content is NSMenu-backed, so only simple
+/// Text/Button render reliably as real menu items — colored shapes (like the
+/// toolbar icon's Circle) don't. Status is conveyed via a colored-circle
+/// emoji in plain Text instead, which renders fine since it's just a glyph.
+private struct ServiceSection: View {
+    @ObservedObject var controller: ServiceController
+
+    var body: some View {
+        Text("\(statusEmoji) \(controller.service.name) — \(statusLabel)")
 
         Button("Start") { controller.start() }
             .disabled(controller.status != .stopped)
@@ -14,28 +30,29 @@ struct MenuBarContentView: View {
             .disabled(controller.status == .stopped)
         Button("Restart") { controller.restart() }
             .disabled(controller.status == .stopped)
-
-        Divider()
-
-        Button("Open Docs") { controller.openDocs() }
+        Button("Open") { controller.open() }
             .disabled(controller.status != .running)
+    }
 
-        Divider()
-
-        Button("Quit") { NSApplication.shared.terminate(nil) }
+    private var statusEmoji: String {
+        switch controller.status {
+        case .running: return "🟢"
+        case .starting: return "🟡"
+        case .stopped: return "🔴"
+        }
     }
 
     private var statusLabel: String {
         switch controller.status {
-        case .running: return "Homebase running"
-        case .starting: return "Starting…"
-        case .stopped: return "Homebase stopped"
+        case .running: return "running"
+        case .starting: return "starting…"
+        case .stopped: return "stopped"
         }
     }
 }
 
 struct StatusIcon: View {
-    let status: HomebaseController.Status
+    let status: ServiceController.Status
 
     var body: some View {
         Image(systemName: "star.fill")
