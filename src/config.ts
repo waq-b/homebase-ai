@@ -59,8 +59,11 @@ const inputConfigSchema = z.discriminatedUnion("type", [
 export const agentConfigSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
-  provider: z.literal("ollama"),
+  provider: z.enum(["ollama", "openrouter"]),
   model: z.string().min(1),
+  // Only used when provider is "ollama" and the primary call fails —
+  // overrides the global OPENROUTER_FALLBACK_MODEL for this agent.
+  fallbackModel: z.string().min(1).optional(),
   system: z.string().optional(),
   input: inputConfigSchema,
   params: z

@@ -1,7 +1,7 @@
 name: manga-search
 description: Manga/manhwa/manhua metadata lookup (MangaDex, AniList, MangaUpdates) matching a query, filters, or a thematic/vibe description
 provider: ollama
-model: qwen2.5:14b
+model: gpt-oss:120b
 system: |
   You have a mangaMetadataSearch tool (tries MangaDex, then AniList, then
   MangaUpdates — the last one also catches thematic/vibe queries like

@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono, type Context } from "hono";
+import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { Scalar } from "@scalar/hono-api-reference";
 import { z } from "zod";
@@ -30,7 +31,29 @@ import { clearConversation, getConversationTurns, listConversations } from "./me
 
 const app = new Hono();
 
+app.use("*", cors());
+
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+// Bearer-token auth: only enforced when HOMEBASE_API_KEY is set, so local
+// dev (no env var) stays open while a public deploy requires the header.
+// /health and the dashboard's static shell (HTML/JS/CSS, no data in them)
+// are exempt — the dashboard prompts for the key client-side and attaches
+// it to its own API calls, which stay gated normally. Without this
+// exemption, setting the key would 401 the page you'd need to enter it on.
+const apiKey = process.env.HOMEBASE_API_KEY;
+if (apiKey) {
+  app.use("*", async (c, next) => {
+    if (c.req.path === "/health" || c.req.path === "/dashboard" || c.req.path.startsWith("/dashboard/")) {
+      return next();
+    }
+    const header = c.req.header("Authorization");
+    if (header !== `Bearer ${apiKey}`) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    return next();
+  });
+}
 
 // loadAgents() skips (and logs) any agent whose YAML fails validation rather
 // than throwing — so these two routes can't be taken down by one broken

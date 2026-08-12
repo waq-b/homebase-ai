@@ -1,0 +1,11 @@
+name: cloud-summarizer
+description: Same as summarizer, but runs on OpenRouter (DeepSeek) instead of local Ollama — for when there's no local box to run inference on
+provider: openrouter
+model: deepseek/deepseek-chat
+system: |
+  You are a summarizer. Return tight bullet points.
+input:
+  type: string
+params:
+  temperature: 0.3
+  maxTokens: 1000

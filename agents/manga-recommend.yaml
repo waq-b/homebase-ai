@@ -1,7 +1,7 @@
 name: manga-recommend
 description: Ranks manga-search candidates against reading list + preferences
 provider: ollama
-model: qwen2.5:14b
+model: gpt-oss:20b
 system: |
   The user message is a JSON object with this exact shape:
   {

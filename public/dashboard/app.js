@@ -55,10 +55,24 @@ const el = (tag, attrs = {}, children = []) => {
   return node;
 };
 
+// Only relevant once HOMEBASE_API_KEY is set server-side (see src/server.ts) —
+// unset here, every route but /health just keeps working as before.
+const API_KEY_STORAGE_KEY = "homebase_api_key";
+const getApiKey = () => localStorage.getItem(API_KEY_STORAGE_KEY) || "";
+const setApiKey = (key) => {
+  if (key) localStorage.setItem(API_KEY_STORAGE_KEY, key);
+  else localStorage.removeItem(API_KEY_STORAGE_KEY);
+};
+
 const api = async (method, path, body) => {
+  const apiKey = getApiKey();
+  const headers = {
+    ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
+  };
   const res = await fetch(BASE_URL + path, {
     method,
-    headers: body !== undefined ? { "content-type": "application/json" } : undefined,
+    headers: Object.keys(headers).length ? headers : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
@@ -641,8 +655,21 @@ const TITLES = {
   memory: ["Memory", () => "Stored conversations"],
 };
 
+const renderApiKeyRow = () => {
+  const row = document.getElementById("api-key-row");
+  row.textContent = getApiKey() ? "API key: set (click to change)" : "API key: not set (click to set)";
+  row.onclick = () => {
+    const next = prompt("Homebase API key (blank to clear):", getApiKey());
+    if (next === null) return;
+    setApiKey(next.trim());
+    renderApiKeyRow();
+    loadHealth();
+  };
+};
+
 const render = () => {
   document.getElementById("base-url").textContent = location.host;
+  renderApiKeyRow();
   renderNav();
 
   const [title, subtitle] = TITLES[state.section];

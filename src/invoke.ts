@@ -1,7 +1,7 @@
 import { generateText, streamText, type CoreMessage, type ToolSet } from "ai";
 import type { z } from "zod";
 import { inputPayloadSchema, type AgentConfig } from "./config.js";
-import { getModel } from "./providers.js";
+import { getFallbackModel, getModel } from "./providers.js";
 import { loadHooks, runHook, type InvokeContext } from "./hooks.js";
 import { connectMcpServers } from "./mcp.js";
 import { appendConversationTurn, getConversationTurns, type TurnRole } from "./memory.js";
@@ -114,8 +114,24 @@ export const invokeAgent = async (agent: AgentConfig, rawBody: unknown): Promise
     const result = await generateText({ ...callSettings(agent, tools), messages });
     text = result.text;
   } catch (err) {
-    await mcpClose();
-    throw new ProviderError(err instanceof Error ? err.message : "Model call failed", err);
+    // Default provider only — an agent explicitly pinned to a specific
+    // provider (e.g. `provider: openrouter`) is a deliberate choice, not
+    // something to silently reroute.
+    const fallbackModel = agent.provider === "ollama" ? getFallbackModel(agent.fallbackModel) : undefined;
+    if (!fallbackModel) {
+      await mcpClose();
+      throw new ProviderError(err instanceof Error ? err.message : "Model call failed", err);
+    }
+    try {
+      const result = await generateText({ ...callSettings(agent, tools), model: fallbackModel, messages });
+      text = result.text;
+    } catch (fallbackErr) {
+      await mcpClose();
+      throw new ProviderError(
+        fallbackErr instanceof Error ? fallbackErr.message : "Model call failed (fallback also failed)",
+        fallbackErr,
+      );
+    }
   }
   await mcpClose();
 
@@ -136,6 +152,10 @@ export const invokeAgent = async (agent: AgentConfig, rawBody: unknown): Promise
  * fires if the stream errors or the client disconnects before it completes,
  * which used to leak the MCP connection in that case.
  */
+// No provider fallback here (unlike invokeAgent): streamText rarely throws
+// synchronously on connectivity failures — errors surface later as
+// stream `error` parts, already relayed to the client by server.ts's SSE
+// loop — so there's no reliable point to swap models before tokens ship.
 export const invokeAgentStream = async (agent: AgentConfig, rawBody: unknown) => {
   const { tools, mcpClose, messages, conversationId, newTurns } = await prepare(agent, rawBody);
 

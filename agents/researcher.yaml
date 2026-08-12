@@ -1,7 +1,7 @@
 name: researcher
 description: Demo agent proving LLM-driven tool-calling (webSearch) works end-to-end
 provider: ollama
-model: qwen2.5:14b
+model: gpt-oss:120b
 system: |
   You have a webSearch tool. Use it whenever the user asks about something
   you'd need current or factual information for. Answer in one short sentence

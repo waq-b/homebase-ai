@@ -1,7 +1,7 @@
 name: mcp-demo
 description: Proof-of-concept agent using tools from an external MCP server (v2.4)
 provider: ollama
-model: qwen2.5:14b
+model: gpt-oss:120b
 system: |
   You have getCurrentTime and rollDice tools from an MCP server. Use them
   when relevant to answer the user's question. Answer in one short sentence.

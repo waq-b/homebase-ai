@@ -1,7 +1,7 @@
 name: summarizer
 description: Summarises text into tight bullet points
 provider: ollama
-model: llama3:latest
+model: gpt-oss:20b
 system: |
   You are a summarizer. Return tight bullet points.
 input:

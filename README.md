@@ -13,17 +13,20 @@ This README covers quickstart/getting started. For deep reference on any feature
 - [`docs/memory.md`](./docs/memory.md) — conversation memory via `conversationId`, `GET`/`DELETE /memory/:id`
 - [`docs/mcp.md`](./docs/mcp.md) — declaring external MCP servers on an agent
 - [`docs/dashboard.md`](./docs/dashboard.md) — the web dashboard at `GET /dashboard`
+- [`docs/deploy.md`](./docs/deploy.md) — running Homebase on a public VPS (Docker, auth, HTTPS)
 
 ## Quickstart
 
-Requires **Node 22.5+** (`node:sqlite`, used by RAG/memory storage — see `docs/rag.md` — was added experimentally in that release; developed and tested against Node 24.x, so prefer that or later if you hit issues on an older 22.x point release, particularly around `sqlite-vec` extension loading). Also requires a local [Ollama](https://ollama.com) server with at least one chat model pulled (e.g. `ollama pull llama3`). RAG/embeddings also need an embedding model — `ollama pull nomic-embed-text` (see `docs/embeddings.md`).
+Requires **Node 22.5+** (`node:sqlite`, used by RAG/memory storage — see `docs/rag.md` — was added experimentally in that release; developed and tested against Node 24.x, so prefer that or later if you hit issues on an older 22.x point release, particularly around `sqlite-vec` extension loading).
+
+By default, `provider: ollama` agents talk to **Ollama Cloud** (`OLLAMA_BASE_URL=https://ollama.com/api`), so you need an `OLLAMA_API_KEY` (free tier at [ollama.com](https://ollama.com)) — see `.env.example`. Point `OLLAMA_BASE_URL` at `http://localhost:11434/api` instead to use a local/LAN Ollama install (with at least one chat model pulled, e.g. `ollama pull llama3`) — no key needed then. RAG/embeddings need an embedding model reachable at whatever `OLLAMA_BASE_URL` is set to (Ollama Cloud doesn't serve embedding models — needs a local/LAN Ollama with `ollama pull nomic-embed-text`; see `docs/embeddings.md`).
 
 ```bash
 npm install
 npm run dev
 ```
 
-No `.env` needed to get started — see `.env.example` for the three overridable settings (`OLLAMA_BASE_URL`, `EMBEDDING_MODEL`, `PORT`), all optional with working defaults.
+`.env` is optional — see `.env.example` for all overridable settings and working defaults. Worth setting `OLLAMA_API_KEY` at minimum since the default provider is Ollama Cloud; `OPENROUTER_API_KEY` enables the free-tier automatic fallback (and any `provider: openrouter` agent) — see `docs/agents.md`'s "Provider mapping" section.
 
 This starts the server at `http://localhost:3000`. Confirm it's up:
 

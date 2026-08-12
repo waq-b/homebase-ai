@@ -20,8 +20,9 @@ The registry (`src/registry.ts`) re-reads every `agents/*.yaml` file on every re
 |---|---|---|---|
 | `name` | string | yes | Must be non-empty. Used as the route segment: `/agents/<name>/invoke`. |
 | `description` | string | yes | Shown in `GET /agents` and as the OpenAPI operation summary. |
-| `provider` | `"ollama"` | yes | Only provider in v1. |
-| `model` | string | yes | Passed straight through to the provider, e.g. `qwen2.5:14b`. |
+| `provider` | `"ollama"` \| `"openrouter"` | yes | `ollama` talks to `OLLAMA_BASE_URL` (Ollama Cloud by default — see below); `openrouter` talks to OpenRouter directly. |
+| `model` | string | yes | Passed straight through to the provider, e.g. `gpt-oss:20b` (ollama) or `deepseek/deepseek-chat` (openrouter). |
+| `fallbackModel` | string | no | `provider: ollama` only. OpenRouter model id used if the primary call fails (only engaged when `OPENROUTER_API_KEY` is set) — overrides the global `OPENROUTER_FALLBACK_MODEL` default for this agent. Streaming invokes (`?stream=true`) don't use this — see `src/invoke.ts`. |
 | `system` | string | no | System prompt, prepended as a `system` message. |
 | `input` | object | yes | See "Input types" below. |
 | `params.temperature` | number | no | Forwarded to the AI SDK call. |
@@ -95,7 +96,11 @@ See `agents/manga-search.yaml` for a flat example and `agents/manga-recommend.ya
 
 ## Provider mapping
 
-`src/providers.ts` maps `{ provider, model }` to an AI SDK `LanguageModel`. For `ollama`, this goes through `ollama-ai-provider` against `OLLAMA_BASE_URL` (default `http://localhost:11434/api`).
+`src/providers.ts` maps `{ provider, model }` to an AI SDK `LanguageModel`.
+
+- `ollama` goes through `ollama-ai-provider` against `OLLAMA_BASE_URL` — **defaults to Ollama Cloud** (`https://ollama.com/api`, requires `OLLAMA_API_KEY`) rather than a local install; point it at `http://localhost:11434/api` for local/LAN Ollama instead. Ollama Cloud only serves its own curated model list (e.g. `gpt-oss:20b`, `gpt-oss:120b`, `deepseek-v4-pro`) — local tags like `qwen2.5:14b` will 404 against it.
+- `openrouter` goes through `@openrouter/ai-sdk-provider`, requires `OPENROUTER_API_KEY`.
+- If a `provider: ollama` call fails (e.g. Ollama Cloud down, or a model tag it doesn't serve), non-streaming invokes (`invokeAgent`) automatically retry once against OpenRouter — using the agent's `fallbackModel` if set, else `OPENROUTER_FALLBACK_MODEL` (default `openai/gpt-oss-20b:free`). Only engaged when `OPENROUTER_API_KEY` is set. Streaming invokes don't get this fallback (see the comment above `invokeAgentStream` in `src/invoke.ts` for why).
 
 Agents whose merged tool set (`hooks.ts` tools + any `mcpServers` tools) is non-empty get `simulateStreaming: true` forced on — Ollama's in-stream tool-call detection is unreliable in practice, so tool-bearing agents generate the full response then chunk it for SSE, rather than streaming raw tokens. Tool-less agents stream real tokens. This applies to MCP-only agents too, not just ones with `hooks.ts` tools.
 

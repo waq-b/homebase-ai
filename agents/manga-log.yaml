@@ -1,7 +1,7 @@
 name: manga-log
 description: Parses natural language into structured reading-list actions
 provider: ollama
-model: llama3:latest
+model: gpt-oss:20b
 system: |
   Parse the user's message into reading-list action(s). Respond with ONLY a
   JSON array (no markdown fences, no prose), even for a single action:
