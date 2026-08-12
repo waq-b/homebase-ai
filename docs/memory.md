@@ -50,3 +50,8 @@ Keeps every turn forever — no TTL/expiry in v1 (the ticket's own open question
 ## Storage
 
 `memory_turns` table in the same SQLite file as RAG (`data/homebase.db`, see `docs/rag.md`): `(id, conversation_id, role, content, created_at)`.
+
+## Caveats
+
+- **`messages`-input agents can double-store history.** For `input.type: "messages"` agents, the caller typically resends the full prior conversation as `input` on every call (the usual chat-client pattern). Combined with `conversationId`, that resent history gets persisted again on top of what memory already stored from the previous turn — Homebase has no way to tell "history the client resent for context" apart from "a genuinely new turn." Either don't pass `conversationId` for `messages`-input agents (let the client own history entirely) or only send the new turn(s) as `input` and let memory supply the rest.
+- **Streaming persists the raw pre-`afterInvoke` text, and drops the turn entirely on client disconnect.** `afterInvoke` only runs on the plain (non-streaming) path (see `docs/invoke.md`), so a streamed reply is stored exactly as generated, before any hook post-processing. And because persistence happens in `onFinish` after the stream completes, a client that disconnects mid-stream causes that turn (both the user's message and the partial assistant reply) to never be written to memory at all.

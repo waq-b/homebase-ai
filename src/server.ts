@@ -14,7 +14,9 @@ import {
   deleteDocument,
   deleteKb,
   DocumentNotFoundError,
+  EmptyDocumentError,
   KbModelMismatchError,
+  KbNameCollisionError,
   KbNotFoundError,
   listDocuments,
   listKbs,
@@ -181,7 +183,12 @@ const mapRagError = (c: Context, err: unknown, fallbackMessage: string) => {
   if (err instanceof KbNotFoundError || err instanceof DocumentNotFoundError) {
     return c.json({ error: err.message }, 404);
   }
-  if (err instanceof KbModelMismatchError || err instanceof InvalidKbNameError) {
+  if (
+    err instanceof KbModelMismatchError ||
+    err instanceof InvalidKbNameError ||
+    err instanceof KbNameCollisionError ||
+    err instanceof EmptyDocumentError
+  ) {
     return c.json({ error: err.message }, 400);
   }
   return c.json({ error: err instanceof Error ? err.message : fallbackMessage }, 502);
@@ -229,7 +236,11 @@ app.get("/kb/:name/documents", (c) => {
   const parsed = listDocumentsQuerySchema.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400);
 
-  return c.json(listDocuments(c.req.param("name"), parsed.data));
+  try {
+    return c.json(listDocuments(c.req.param("name"), parsed.data));
+  } catch (err) {
+    return mapRagError(c, err, "List failed");
+  }
 });
 
 app.put("/kb/:name/documents/:documentId", async (c) => {

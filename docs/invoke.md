@@ -8,9 +8,11 @@ Both the plain and streaming paths share the same `prepare()` step (`src/invoke.
 
 1. **Validate** — `inputPayloadSchema(agent.input).safeParse(rawBody)`. On failure, throws `InputValidationError` → `400` with Zod issue details.
 2. **`beforeInvoke`** — if the agent has a hooks file with a `beforeInvoke`, it runs on the parsed `input` value and can mutate/enrich it before the model call. Throwing here → `500` (`HookError`).
-3. **Build messages** — `toMessages()` turns the (possibly hook-modified) input into a `CoreMessage[]`, prefixed with the agent's `system` message if set. See `docs/agents.md` for how each `input.type` maps to messages.
-4. **Model call** — `generateText` (plain) or `streamText` (SSE), with `temperature`/`maxTokens` from `params` and `tools`/`maxSteps: 5` if the agent has hooks-declared tools. A provider/network failure here → `502` (`ProviderError`).
-5. **`afterInvoke`** — plain path only (see below) — post-processes the model's text output. Throwing here → `500`.
+3. **Build messages** — `turnMessages()` turns the (possibly hook-modified) input into a `CoreMessage[]`, prefixed with the agent's `system` message if set. See `docs/agents.md` for how each `input.type` maps to messages.
+4. **Load memory** — if the request body includes a `conversationId`, that conversation's prior turns are loaded from SQLite and prepended ahead of the new turn(s): `[system?, ...priorTurns, ...newTurn]`. See `docs/memory.md`.
+5. **Model call** — `generateText` (plain) or `streamText` (SSE), with `temperature`/`maxTokens` from `params` and `tools`/`maxSteps: 5` if the agent has hooks-declared or MCP tools. A provider/network failure here → `502` (`ProviderError`).
+6. **`afterInvoke`** — plain path only (see below) — post-processes the model's text output. Throwing here → `500`.
+7. **Persist memory** — if `conversationId` was given, the new turn(s) and the model's reply are appended back to storage.
 
 ## Plain (non-streaming)
 

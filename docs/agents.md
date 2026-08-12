@@ -31,7 +31,7 @@ The registry (`src/registry.ts`) re-reads every `agents/*.yaml` file on every re
 
 ## Input types
 
-`input.type` is one of `string`, `messages`, or `object`. This determines both the Zod schema used to validate `POST /agents/<name>/invoke` request bodies and how the input gets turned into model messages (`toMessages` in `src/invoke.ts`).
+`input.type` is one of `string`, `messages`, or `object`. This determines both the Zod schema used to validate `POST /agents/<name>/invoke` request bodies and how the input gets turned into model messages (`turnMessages` in `src/invoke.ts`).
 
 ### `string`
 
@@ -97,7 +97,7 @@ See `agents/manga-search.yaml` for a flat example and `agents/manga-recommend.ya
 
 `src/providers.ts` maps `{ provider, model }` to an AI SDK `LanguageModel`. For `ollama`, this goes through `ollama-ai-provider` against `OLLAMA_BASE_URL` (default `http://localhost:11434/api`).
 
-Agents whose `hooks.tools` is non-empty get `simulateStreaming: true` forced on — Ollama's in-stream tool-call detection is unreliable in practice, so tool-bearing agents generate the full response then chunk it for SSE, rather than streaming raw tokens. Tool-less agents stream real tokens.
+Agents whose merged tool set (`hooks.ts` tools + any `mcpServers` tools) is non-empty get `simulateStreaming: true` forced on — Ollama's in-stream tool-call detection is unreliable in practice, so tool-bearing agents generate the full response then chunk it for SSE, rather than streaming raw tokens. Tool-less agents stream real tokens. This applies to MCP-only agents too, not just ones with `hooks.ts` tools.
 
 ## OpenAPI generation
 

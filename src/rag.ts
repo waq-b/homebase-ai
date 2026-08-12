@@ -28,6 +28,25 @@ export class KbModelMismatchError extends Error {
   }
 }
 
+export class KbNameCollisionError extends Error {
+  constructor(
+    public readonly kbName: string,
+    public readonly collidesWith: string,
+  ) {
+    super(
+      `KB name "${kbName}" collides with existing KB "${collidesWith}" — both sanitize to the same underlying vector table (names differing only by "-"/"_" aren't distinct). Pick a different name.`,
+    );
+    this.name = "KbNameCollisionError";
+  }
+}
+
+export class EmptyDocumentError extends Error {
+  constructor() {
+    super("Document has no content to index (text is empty or whitespace-only)");
+    this.name = "EmptyDocumentError";
+  }
+}
+
 const CHUNK_SIZE = 800;
 
 /**
@@ -101,9 +120,33 @@ export const listKbs = (): KbSummary[] => {
   return rows;
 };
 
+/**
+ * Runs `fn` inside a BEGIN/COMMIT, rolling back on any throw so a mid-write
+ * failure (e.g. an embedding call that rejects partway through) can't orphan
+ * chunk rows or vector rows relative to each other.
+ */
+const withTransaction = <T>(fn: () => T): T => {
+  const db = getDb();
+  db.exec("BEGIN");
+  try {
+    const result = fn();
+    db.exec("COMMIT");
+    return result;
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+};
+
 const createKbConfig = (kbName: string, embeddingModel: string, dimension: number): KbConfig => {
   const vectorTable = `kb_vec_${sanitizeKbName(kbName).replace(/-/g, "_")}`;
   const db = getDb();
+
+  const collision = db
+    .prepare("SELECT kb_name FROM kb_config WHERE vector_table = ?")
+    .get(vectorTable) as { kb_name: string } | undefined;
+  if (collision) throw new KbNameCollisionError(kbName, collision.kb_name);
+
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS "${vectorTable}" USING vec0(embedding float[${dimension}])`);
   db.prepare(
     "INSERT INTO kb_config (kb_name, embedding_model, dimension, vector_table) VALUES (?, ?, ?, ?)",
@@ -157,7 +200,7 @@ export const addDocument = async (
 ): Promise<AddDocumentResult> => {
   sanitizeKbName(kbName);
   const chunks = chunkText(text);
-  if (chunks.length === 0) throw new Error("Document has no content to index");
+  if (chunks.length === 0) throw new EmptyDocumentError();
 
   const existing = getKbConfig(kbName);
   if (existing && options.model && options.model !== existing.embeddingModel) {
@@ -170,16 +213,19 @@ export const addDocument = async (
   // KB, the first vector's length is also how we learn the model's
   // dimension to size the table.
   const { vectors } = await embedTexts(chunks, modelId);
-  const kb = existing ?? createKbConfig(kbName, modelId, vectors[0].length);
 
-  const documentInfo = getDb()
-    .prepare("INSERT INTO kb_documents (kb_name, metadata) VALUES (?, ?)")
-    .run(kbName, options.metadata !== undefined ? JSON.stringify(options.metadata) : null);
-  const documentId = Number(documentInfo.lastInsertRowid);
+  return withTransaction(() => {
+    const kb = existing ?? createKbConfig(kbName, modelId, vectors[0].length);
 
-  insertChunks(kb, kbName, documentId, chunks, vectors);
+    const documentInfo = getDb()
+      .prepare("INSERT INTO kb_documents (kb_name, metadata) VALUES (?, ?)")
+      .run(kbName, options.metadata !== undefined ? JSON.stringify(options.metadata) : null);
+    const documentId = Number(documentInfo.lastInsertRowid);
 
-  return { documentId, chunksAdded: chunks.length, embeddingModel: modelId };
+    insertChunks(kb, kbName, documentId, chunks, vectors);
+
+    return { documentId, chunksAdded: chunks.length, embeddingModel: modelId };
+  });
 };
 
 const deleteDocumentChunks = (kb: KbConfig, documentId: number) => {
@@ -228,28 +274,38 @@ export const updateDocument = async (
   if (!kb) throw new KbNotFoundError(kbName);
   getDocumentOrThrow(kbName, documentId);
 
-  const db = getDb();
-  let chunksAdded = 0;
-
+  let chunks: string[] | undefined;
+  let vectors: number[][] | undefined;
   if (options.text !== undefined) {
-    deleteDocumentChunks(kb, documentId);
-
-    const chunks = chunkText(options.text);
-    const { vectors } = await embedTexts(chunks, kb.embeddingModel);
-    insertChunks(kb, kbName, documentId, chunks, vectors);
-    chunksAdded = chunks.length;
+    chunks = chunkText(options.text);
+    if (chunks.length === 0) throw new EmptyDocumentError();
+    // Validated before touching existing chunks — a rejected update should
+    // never leave the document with its old chunks deleted and nothing to
+    // replace them.
+    ({ vectors } = await embedTexts(chunks, kb.embeddingModel));
   }
 
-  if (options.metadata !== undefined) {
-    db.prepare("UPDATE kb_documents SET metadata = ?, updated_at = datetime('now') WHERE id = ?").run(
-      JSON.stringify(options.metadata),
-      documentId,
-    );
-  } else {
-    db.prepare("UPDATE kb_documents SET updated_at = datetime('now') WHERE id = ?").run(documentId);
-  }
+  return withTransaction(() => {
+    const db = getDb();
+    let chunksAdded = 0;
 
-  return { documentId, chunksAdded };
+    if (chunks && vectors) {
+      deleteDocumentChunks(kb, documentId);
+      insertChunks(kb, kbName, documentId, chunks, vectors);
+      chunksAdded = chunks.length;
+    }
+
+    if (options.metadata !== undefined) {
+      db.prepare("UPDATE kb_documents SET metadata = ?, updated_at = datetime('now') WHERE id = ?").run(
+        JSON.stringify(options.metadata),
+        documentId,
+      );
+    } else {
+      db.prepare("UPDATE kb_documents SET updated_at = datetime('now') WHERE id = ?").run(documentId);
+    }
+
+    return { documentId, chunksAdded };
+  });
 };
 
 export const deleteDocument = (kbName: string, documentId: number): void => {
@@ -257,8 +313,10 @@ export const deleteDocument = (kbName: string, documentId: number): void => {
   if (!kb) throw new KbNotFoundError(kbName);
   getDocumentOrThrow(kbName, documentId);
 
-  deleteDocumentChunks(kb, documentId);
-  getDb().prepare("DELETE FROM kb_documents WHERE id = ?").run(documentId);
+  withTransaction(() => {
+    deleteDocumentChunks(kb, documentId);
+    getDb().prepare("DELETE FROM kb_documents WHERE id = ?").run(documentId);
+  });
 };
 
 /** Drops a KB entirely — its dedicated vec0 table, every document/chunk row, and its kb_config row. */
@@ -266,13 +324,15 @@ export const deleteKb = (kbName: string): void => {
   const kb = getKbConfig(kbName);
   if (!kb) throw new KbNotFoundError(kbName);
 
-  const db = getDb();
-  db.exec(`DROP TABLE IF EXISTS "${kb.vectorTable}"`);
-  db.prepare(
-    "DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE kb_name = ?)",
-  ).run(kbName);
-  db.prepare("DELETE FROM kb_documents WHERE kb_name = ?").run(kbName);
-  db.prepare("DELETE FROM kb_config WHERE kb_name = ?").run(kbName);
+  withTransaction(() => {
+    const db = getDb();
+    db.exec(`DROP TABLE IF EXISTS "${kb.vectorTable}"`);
+    db.prepare(
+      "DELETE FROM kb_chunks WHERE document_id IN (SELECT id FROM kb_documents WHERE kb_name = ?)",
+    ).run(kbName);
+    db.prepare("DELETE FROM kb_documents WHERE kb_name = ?").run(kbName);
+    db.prepare("DELETE FROM kb_config WHERE kb_name = ?").run(kbName);
+  });
 };
 
 export interface DocumentSummary {
@@ -298,6 +358,9 @@ export interface ListDocumentsResult {
 const DEFAULT_LIST_LIMIT = 100;
 
 export const listDocuments = (kbName: string, options: ListDocumentsOptions = {}): ListDocumentsResult => {
+  sanitizeKbName(kbName);
+  if (!getKbConfig(kbName)) throw new KbNotFoundError(kbName);
+
   const limit = options.limit ?? DEFAULT_LIST_LIMIT;
   const offset = options.offset ?? 0;
   const db = getDb();

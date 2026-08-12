@@ -3,7 +3,9 @@ import {
   addDocument,
   deleteDocument,
   deleteKb,
+  EmptyDocumentError,
   KbModelMismatchError,
+  KbNameCollisionError,
   KbNotFoundError,
   searchKb,
   updateDocument,
@@ -130,6 +132,35 @@ describe("per-KB embedding model lock", () => {
     const resultsB = await searchKb(kbB, "different model");
     expect(resultsA).toHaveLength(1);
     expect(resultsB).toHaveLength(1);
+  });
+});
+
+describe("whitespace-only text", () => {
+  it("addDocument rejects with EmptyDocumentError, not a 502-mapped generic error", async () => {
+    const kb = freshKbName("whitespace-add");
+    await expect(addDocument(kb, "   \n\n  ")).rejects.toBeInstanceOf(EmptyDocumentError);
+  });
+
+  it("updateDocument rejects whitespace-only text without deleting the existing chunks", async () => {
+    const kb = freshKbName("whitespace-update");
+    const { documentId } = await addDocument(kb, "Original content that should survive a rejected update.");
+
+    await expect(updateDocument(kb, documentId, { text: "   " })).rejects.toBeInstanceOf(EmptyDocumentError);
+
+    const results = await searchKb(kb, "Original content survive");
+    expect(results).toHaveLength(1);
+  });
+});
+
+describe("KB name collision", () => {
+  it("a name that sanitizes to an existing KB's vector table is rejected", async () => {
+    const base = `test-collide-${Date.now()}`;
+    testKbs.push(base, base.replace(/-/g, "_"));
+    await addDocument(base, "First KB, establishes the vector table.");
+
+    await expect(addDocument(base.replace(/-/g, "_"), "Second KB, same table name.")).rejects.toBeInstanceOf(
+      KbNameCollisionError,
+    );
   });
 });
 

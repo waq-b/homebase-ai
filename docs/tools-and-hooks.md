@@ -60,7 +60,7 @@ export default {
 Two behavioral consequences of declaring `tools`, both driven from `src/providers.ts`/`src/invoke.ts`:
 
 - **Not every Ollama model supports tool-calling.** Sending `tools` to a model that doesn't (e.g. plain `llama3:latest`) 400s. Pick a model with real tool support (`qwen2.5`, `llama3.1`+, `mistral-nemo`, etc.) — see `agents/shout.yaml` for a tool-less agent and `agents/researcher.yaml` for a tool-bearing one.
-- **Streaming becomes simulated, not token-by-token.** Forced by `simulateStreaming: true` whenever `hooks.tools` is non-empty.
+- **Streaming becomes simulated, not token-by-token.** Forced by `simulateStreaming: true` whenever the agent's merged tool set (`hooks.ts` tools + `mcpServers` tools) is non-empty — so an MCP-only agent with no `hooks.ts` tools of its own still simulates.
 - **The model decides whether to call the tool at all.** Small local models are inconsistent — sometimes they'll answer from internal knowledge instead of calling a clearly-relevant tool. That's model behavior, not something a hook can force.
 
 ## The shared `tools/` convention

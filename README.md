@@ -157,7 +157,7 @@ src/
 ├── openapi.ts        # builds the OpenAPI 3.1 doc from the live registry
 ├── db.ts             # node:sqlite + sqlite-vec, shared by rag.ts and memory.ts
 ├── embeddings.ts      # POST /embed
-├── rag.ts              # POST /kb/:name/documents, /search
+├── rag.ts              # KB CRUD: GET /kb, DELETE /kb/:name, POST/GET/PUT/DELETE /kb/:name/documents[/:id], POST /kb/:name/search
 ├── memory.ts            # conversation turns, keyed by conversationId
 └── mcp.ts                # connects an agent's mcpServers, merges their tools in
 agents/               # <name>.yaml (+ optional <name>.hooks.ts)
@@ -166,6 +166,7 @@ mcp-servers/          # demo-time: a keyless local MCP server proving v2.4's cli
 docs/                 # deep reference per feature — see docs/ links above
 toolbar-app/          # macOS menu bar app (Swift/SwiftUI) to start/stop/status Homebase + mangaFinder — separate tech stack
 data/                 # gitignored — homebase.db (RAG + memory storage), created on first use
+.github/workflows/    # CI: typecheck + test:unit on push/PR to main
 ```
 
 ## Scripts
@@ -183,4 +184,4 @@ npm run test:unit      # CI-safe subset — excludes *.integration.test.ts
 
 Vitest, zero-config (TS/ESM works out of the box, no `vitest.config.ts` needed). Two kinds of test file, by design:
 - `*.test.ts` — pure logic, no external dependencies (e.g. `src/config.test.ts`). Fast, deterministic, safe to run anywhere including CI.
-- `*.integration.test.ts` — hits a real local Ollama instance (e.g. `src/rag.test.ts` needs real embeddings + `sqlite-vec`). Matches this project's overall "boring, real, simple over clever mocking" philosophy — no fake embedding provider was built just to make these mockable. Requires Ollama running locally with `nomic-embed-text` pulled; **not run in CI** (GitHub Actions runners don't have Ollama), which is why `npm run test:unit` exists as the CI-safe subset.
+- `*.integration.test.ts` — hits a real local Ollama instance (e.g. `src/rag.integration.test.ts` needs real embeddings + `sqlite-vec`). Matches this project's overall "boring, real, simple over clever mocking" philosophy — no fake embedding provider was built just to make these mockable. Requires Ollama running locally with `nomic-embed-text` pulled; **not run in CI** (GitHub Actions runners don't have Ollama), which is why `npm run test:unit` exists as the CI-safe subset.

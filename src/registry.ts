@@ -27,10 +27,10 @@ export interface AgentLoadResult {
  * rather than aborting the whole load — one broken agent config shouldn't
  * take every other agent (and /openapi.json, /docs) down with it.
  */
-export const loadAgentsDetailed = async (): Promise<AgentLoadResult> => {
+export const loadAgentsDetailed = async (agentsDir: string = AGENTS_DIR): Promise<AgentLoadResult> => {
   let files: string[];
   try {
-    files = await readdir(AGENTS_DIR);
+    files = await readdir(agentsDir);
   } catch {
     return { agents: [], errors: [] };
   }
@@ -40,8 +40,17 @@ export const loadAgentsDetailed = async (): Promise<AgentLoadResult> => {
   const agents: AgentConfig[] = [];
   const errors: AgentConfigError[] = [];
   for (const file of yamlFiles) {
-    const raw = await readFile(path.join(AGENTS_DIR, file), "utf-8");
-    const parsed = yaml.load(raw);
+    let parsed: unknown;
+    try {
+      const raw = await readFile(path.join(agentsDir, file), "utf-8");
+      parsed = yaml.load(raw);
+    } catch (err) {
+      const error = new AgentConfigError(file, err instanceof Error ? err.message : String(err));
+      errors.push(error);
+      console.error(`Skipping unreadable/invalid agent config: ${error.message}`);
+      continue;
+    }
+
     const result = agentConfigSchema.safeParse(parsed);
     if (!result.success) {
       const error = new AgentConfigError(file, result.error.message);
