@@ -167,9 +167,14 @@ public/dashboard/      # static web dashboard, served at GET /dashboard (docs/da
 mcp-servers/          # demo-time: a keyless local MCP server proving v2.4's client support
 docs/                 # deep reference per feature — see docs/ links above
 toolbar-app/          # macOS menu bar app (Swift/SwiftUI) to start/stop/status Homebase + mangaFinder — separate tech stack
+homebase-client/      # shared client package for toolkit apps to call Homebase — own package.json, see its README
 data/                 # gitignored — homebase.db (RAG + memory storage), created on first use
-.github/workflows/    # CI: typecheck + test:unit on push/PR to main
+.github/workflows/    # CI: typecheck + test:unit on push/PR to main (+ a separate job for homebase-client)
 ```
+
+## homebase-client
+
+`homebase-client/` is a self-contained shared package other toolkit apps (mangaFinder, betBuddy, ...) depend on via `file:../homebase/homebase-client` to call this API — agent invoke (plain + SSE streaming), RAG knowledge bases, conversation memory. It's not part of the main `src/` build; it has its own `package.json`, `tsconfig.json`, and test suite. See [homebase-client/README.md](homebase-client/README.md).
 
 ## Scripts
 

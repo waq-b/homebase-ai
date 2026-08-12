@@ -24,3 +24,22 @@ jobs:
       # Excludes *.integration.test.ts (needs a real local Ollama instance,
       # which this runner doesn't have) — see README's Testing section.
       - run: npm run test:unit
+
+  homebase-client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: homebase-client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: homebase-client/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

@@ -11,8 +11,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "mcp:demo": "tsx watch mcp-servers/demo-time/server.ts",
-    "test": "vitest run",
-    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\""
+    "test": "vitest run --exclude \"homebase-client/**\"",
+    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"homebase-client/**\""
   },
   "dependencies": {
     "@hono/node-server": "^2.1.0",
