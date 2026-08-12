@@ -52,7 +52,7 @@ Two behavioral consequences of declaring `tools`, both driven from `src/provider
 ```
 tools/
 ├── webSearch.ts           # generic DuckDuckGo-backed search — agents/researcher.yaml
-└── mangaMetadataSearch.ts # manga/manhwa/manhua metadata (MangaDex + AniList) — agents/manga-search.yaml
+└── mangaMetadataSearch.ts # manga/manhwa/manhua metadata (MangaDex, AniList, MangaUpdates) — agents/manga-search.yaml
 ```
 
 Any agent's `hooks.ts` can import any file in `tools/` — there's no per-agent tool registration beyond the import.
@@ -69,7 +69,14 @@ export const webSearch = tool({
 
 **Known limitation:** DuckDuckGo's Instant Answer API is sparse for anything outside broad encyclopedic topics (it often returns no abstract text for niche or specific queries, and never returns a source URL) — and its HTML search endpoint (a tempting keyless alternative) hard-blocks with a 403 after a single request, so it's not a viable swap either. Fine for `researcher`'s demo purpose; **not** a good fit for anything needing real, domain-specific grounding — see `tools/mangaMetadataSearch.ts` below for how `manga-search` moved off it.
 
-**`tools/mangaMetadataSearch.ts`**: purpose-built replacement for `manga-search`, after `webSearch` was confirmed both non-functional (DuckDuckGo returning empty responses in practice) and a poor fit even when working (no manga/anime awareness). Tries [MangaDex](https://api.mangadex.org) first — the strongest niche/indie coverage of the keyless options evaluated — falling back to [AniList](https://graphql.anilist.co)'s GraphQL API if MangaDex has no results. Both sources' differing status vocabularies (`ongoing`/`hiatus`/... vs `RELEASING`/`HIATUS`/...) are normalized inside the tool, so the calling agent's system prompt doesn't need to know which backend actually answered. A good template for "generic tool doesn't fit this agent's domain" — build (or find) a purpose-built one instead of stretching the generic tool further.
+**`tools/mangaMetadataSearch.ts`**: purpose-built replacement for `manga-search`, after `webSearch` was confirmed both non-functional (DuckDuckGo returning empty responses in practice) and a poor fit even when working (no manga/anime awareness). Three sources, tried in order until one returns results:
+1. [MangaDex](https://api.mangadex.org) — strongest niche/indie coverage, title-matched search.
+2. [AniList](https://graphql.anilist.co) — broader mainstream coverage, also title-matched.
+3. [MangaUpdates](https://api.mangaupdates.com) — full-text search over descriptions, not titles. This is the one that actually answers thematic/vibe queries ("villainess otome revenge") that title-only matching misses entirely — added after that exact gap was found and confirmed via direct API calls. No content-rating filter exists on this endpoint (unlike MangaDex's), so explicit results are excluded by genre tag instead, to keep this source at the same content bar as the other two. Its pagination parameter (`perpage`) is also silently ignored by the live API (confirmed empirically) — results are truncated client-side instead.
+
+All three sources' differing status vocabularies (`ongoing`/`hiatus`/... vs `RELEASING`/`HIATUS`/...) and format signals (origin language/country vs. a direct format field) are normalized inside the tool into one `format`/`status` shape, so the calling agent's system prompt doesn't need to know which backend actually answered. Cover art (`coverUrl`) is extracted from MangaDex and AniList; MangaUpdates provides it natively. A good template for "generic tool doesn't fit this agent's domain" — build (or find) a purpose-built one instead of stretching the generic tool further.
+
+**Known model-behavior quirk observed during testing:** on rare occasions, especially in a multi-step tool-call loop against a query with no real results, the model appears to lose track of the original query partway through — likely `qwen2.5:14b`'s relatively small context window (4096 tokens, per `ollama ps`) getting crowded by several rounds of verbose real tool results. Not something these tools or Homebase's invoke pipeline can fix directly (the tool itself returns correct, verified results every time when called with the actual intended query — confirmed via direct, non-agent testing); flagged here as an observed limitation of small local models under extended tool loops, consistent with the general "model decides whether/how to use tools" unreliability noted above.
 
 ## Adding a new tool
 
