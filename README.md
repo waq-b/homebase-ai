@@ -171,8 +171,16 @@ data/                 # gitignored — homebase.db (RAG + memory storage), creat
 ## Scripts
 
 ```bash
-npm run dev        # start with auto-reload
-npm run typecheck  # tsc --noEmit
-npm run build       # compile to dist/
-npm run mcp:demo    # start the demo MCP server (docs/mcp.md)
+npm run dev         # start with auto-reload
+npm run typecheck   # tsc --noEmit
+npm run build        # compile to dist/
+npm run mcp:demo     # start the demo MCP server (docs/mcp.md)
+npm test              # everything, incl. tests that hit a real local Ollama
+npm run test:unit      # CI-safe subset — excludes *.integration.test.ts
 ```
+
+### Testing
+
+Vitest, zero-config (TS/ESM works out of the box, no `vitest.config.ts` needed). Two kinds of test file, by design:
+- `*.test.ts` — pure logic, no external dependencies (e.g. `src/config.test.ts`). Fast, deterministic, safe to run anywhere including CI.
+- `*.integration.test.ts` — hits a real local Ollama instance (e.g. `src/rag.test.ts` needs real embeddings + `sqlite-vec`). Matches this project's overall "boring, real, simple over clever mocking" philosophy — no fake embedding provider was built just to make these mockable. Requires Ollama running locally with `nomic-embed-text` pulled; **not run in CI** (GitHub Actions runners don't have Ollama), which is why `npm run test:unit` exists as the CI-safe subset.

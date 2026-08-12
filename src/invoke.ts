@@ -44,7 +44,14 @@ const extractConversationId = (rawBody: unknown): string | undefined => {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
-const prepare = async (agent: AgentConfig, rawBody: unknown) => {
+/**
+ * Exported (not just used internally by invokeAgent/invokeAgentStream) so
+ * message-composition/tool-merging logic is directly unit-testable without
+ * a real model call — for an agent with no hooks/mcpServers, this function
+ * itself does no network I/O at all (only a local SQLite read if
+ * conversationId is set).
+ */
+export const prepare = async (agent: AgentConfig, rawBody: unknown) => {
   const parsed = inputPayloadSchema(agent.input).safeParse(rawBody);
   if (!parsed.success) throw new InputValidationError(parsed.error.issues);
 
