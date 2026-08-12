@@ -32,6 +32,10 @@ private struct ServiceSection: View {
             .disabled(controller.status == .stopped)
         Button("Open") { controller.open() }
             .disabled(controller.status != .running)
+        if controller.service.dashboardURL != nil {
+            Button("Open Dashboard") { controller.openDashboard() }
+                .disabled(controller.status != .running)
+        }
     }
 
     private var statusEmoji: String {

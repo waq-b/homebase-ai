@@ -8,6 +8,10 @@ struct ManagedService: Identifiable {
     let arguments: [String]
     let healthURL: URL
     let openURL: URL
+    /// Optional second "Open" action — currently just Homebase's dashboard.
+    /// A dedicated field rather than a list of actions since there's only
+    /// ever this one extra case; generalize later if a second one shows up.
+    let dashboardURL: URL?
 
     var id: String { name }
 }
@@ -22,6 +26,7 @@ extension ManagedService {
         arguments: ["npm", "run", "dev"],
         healthURL: URL(string: "http://localhost:3000/agents")!,
         openURL: URL(string: "http://localhost:3000/docs")!,
+        dashboardURL: URL(string: "http://localhost:3000/dashboard")!,
     )
 
     static let mangaFinderAPI = ManagedService(
@@ -30,6 +35,7 @@ extension ManagedService {
         arguments: ["npm", "run", "dev"],
         healthURL: URL(string: "http://localhost:3100/health")!,
         openURL: URL(string: "http://localhost:3100/docs")!,
+        dashboardURL: nil,
     )
 
     static let mangaFinderWeb = ManagedService(
@@ -39,6 +45,7 @@ extension ManagedService {
         // Vite has no JSON health endpoint — any 200 on the root is enough.
         healthURL: URL(string: "http://localhost:5173")!,
         openURL: URL(string: "http://localhost:5173")!,
+        dashboardURL: nil,
     )
 
     static let all: [ManagedService] = [homebase, mangaFinderAPI, mangaFinderWeb]

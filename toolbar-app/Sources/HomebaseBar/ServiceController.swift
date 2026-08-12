@@ -79,6 +79,11 @@ final class ServiceController: ObservableObject, Identifiable {
         NSWorkspace.shared.open(service.openURL)
     }
 
+    func openDashboard() {
+        guard let dashboardURL = service.dashboardURL else { return }
+        NSWorkspace.shared.open(dashboardURL)
+    }
+
     private func refreshStatus() async {
         var request = URLRequest(url: service.healthURL)
         request.timeoutInterval = 3
