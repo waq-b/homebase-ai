@@ -12,6 +12,7 @@ This README covers quickstart/getting started. For deep reference on any feature
 - [`docs/rag.md`](./docs/rag.md) — knowledge bases: `POST /kb/:name/documents`, `POST /kb/:name/search`
 - [`docs/memory.md`](./docs/memory.md) — conversation memory via `conversationId`, `GET`/`DELETE /memory/:id`
 - [`docs/mcp.md`](./docs/mcp.md) — declaring external MCP servers on an agent
+- [`docs/dashboard.md`](./docs/dashboard.md) — the web dashboard at `GET /dashboard`
 
 ## Quickstart
 
@@ -162,6 +163,7 @@ src/
 └── mcp.ts                # connects an agent's mcpServers, merges their tools in
 agents/               # <name>.yaml (+ optional <name>.hooks.ts)
 tools/                # shared AI SDK tool() definitions, importable from any hooks.ts
+public/dashboard/      # static web dashboard, served at GET /dashboard (docs/dashboard.md)
 mcp-servers/          # demo-time: a keyless local MCP server proving v2.4's client support
 docs/                 # deep reference per feature — see docs/ links above
 toolbar-app/          # macOS menu bar app (Swift/SwiftUI) to start/stop/status Homebase + mangaFinder — separate tech stack

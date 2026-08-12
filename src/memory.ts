@@ -24,6 +24,25 @@ export const getConversationTurns = (conversationId: string): StoredTurn[] => {
   return rows;
 };
 
+export interface ConversationSummary {
+  conversationId: string;
+  turnCount: number;
+  lastActive: string;
+}
+
+/** For dashboard/debugging use — every distinct conversationId with a turn count and its most recent activity. */
+export const listConversations = (): ConversationSummary[] => {
+  const rows = getDb()
+    .prepare(
+      `SELECT conversation_id as conversationId, COUNT(*) as turnCount, MAX(created_at) as lastActive
+       FROM memory_turns
+       GROUP BY conversation_id
+       ORDER BY lastActive DESC`,
+    )
+    .all() as unknown as ConversationSummary[];
+  return rows;
+};
+
 export const appendConversationTurn = (conversationId: string, role: TurnRole, content: string): void => {
   getDb()
     .prepare("INSERT INTO memory_turns (conversation_id, role, content) VALUES (?, ?, ?)")

@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { Scalar } from "@scalar/hono-api-reference";
@@ -24,7 +25,7 @@ import {
   updateDocument,
 } from "./rag.js";
 import { InvalidKbNameError } from "./db.js";
-import { clearConversation, getConversationTurns } from "./memory.js";
+import { clearConversation, getConversationTurns, listConversations } from "./memory.js";
 
 const app = new Hono();
 
@@ -50,6 +51,12 @@ app.get("/openapi.json", async (c) => {
 });
 
 app.get("/docs", Scalar({ url: "/openapi.json" }));
+
+// v2.5 — Homebase-hosted dashboard (public/dashboard/), a static vanilla-JS
+// app implementing the owner's Claude Design prototype against the real
+// API. No second server, no build step — served straight off disk.
+app.get("/dashboard", (c) => c.redirect("/dashboard/"));
+app.use("/dashboard/*", serveStatic({ root: "./public" }));
 
 const readJsonBody = async (c: Context): Promise<{ ok: true; body: unknown } | { ok: false }> => {
   try {
@@ -308,6 +315,10 @@ app.post("/kb/:name/search", async (c) => {
 // v2.3 — conversation memory. Writing happens inside invokeAgent/invokeAgentStream
 // (POST /agents/:name/invoke with a conversationId in the body); these two
 // routes are just raw read/clear for app-side display or debugging.
+app.get("/memory", (c) => {
+  return c.json({ conversations: listConversations() });
+});
+
 app.get("/memory/:conversationId", (c) => {
   const conversationId = c.req.param("conversationId");
   return c.json({ conversationId, turns: getConversationTurns(conversationId) });

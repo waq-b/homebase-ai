@@ -213,6 +213,15 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
         },
       },
     },
+    "/memory": {
+      get: {
+        summary: "List every conversation with stored turns",
+        tags: ["Memory"],
+        responses: {
+          "200": { description: "{ conversations: { conversationId, turnCount, lastActive }[] }" },
+        },
+      },
+    },
     "/memory/{conversationId}": {
       get: {
         summary: "Fetch a conversation's raw stored turns",
