@@ -16,6 +16,7 @@ import {
   deleteKb,
   DocumentNotFoundError,
   EmptyDocumentError,
+  getDocument,
   KbModelMismatchError,
   KbNameCollisionError,
   KbNotFoundError,
@@ -247,6 +248,19 @@ app.get("/kb/:name/documents", (c) => {
     return c.json(listDocuments(c.req.param("name"), parsed.data));
   } catch (err) {
     return mapRagError(c, err, "List failed");
+  }
+});
+
+app.get("/kb/:name/documents/:documentId", (c) => {
+  const documentId = Number(c.req.param("documentId"));
+  if (!Number.isInteger(documentId)) {
+    return c.json({ error: "documentId must be an integer" }, 400);
+  }
+
+  try {
+    return c.json(getDocument(c.req.param("name"), documentId));
+  } catch (err) {
+    return mapRagError(c, err, "Fetch failed");
   }
 });
 

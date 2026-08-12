@@ -400,6 +400,41 @@ export const listDocuments = (kbName: string, options: ListDocumentsOptions = {}
   return { documents, total, limit, offset };
 };
 
+export interface DocumentDetail {
+  id: number;
+  metadata: unknown;
+  createdAt: string;
+  updatedAt: string;
+  /** Chunks in index order, rejoined — the closest thing to "the document's original text" this schema stores. */
+  content: string;
+}
+
+/** Full content for one document — `listDocuments` deliberately omits this (a list of every chunk's text doesn't scale), so fetch it per-document when actually needed. */
+export const getDocument = (kbName: string, documentId: number): DocumentDetail => {
+  sanitizeKbName(kbName);
+  if (!getKbConfig(kbName)) throw new KbNotFoundError(kbName);
+  getDocumentOrThrow(kbName, documentId);
+
+  const db = getDb();
+  const doc = db
+    .prepare(
+      "SELECT id, metadata, created_at as createdAt, updated_at as updatedAt FROM kb_documents WHERE id = ?",
+    )
+    .get(documentId) as { id: number; metadata: string | null; createdAt: string; updatedAt: string };
+
+  const chunks = db
+    .prepare("SELECT content FROM kb_chunks WHERE document_id = ? ORDER BY chunk_index ASC")
+    .all(documentId) as { content: string }[];
+
+  return {
+    id: doc.id,
+    metadata: doc.metadata ? JSON.parse(doc.metadata) : null,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    content: chunks.map((c) => c.content).join("\n\n"),
+  };
+};
+
 const matchesFilter = (metadata: Record<string, unknown>, filter: Record<string, unknown>): boolean =>
   Object.entries(filter).every(([key, value]) => metadata[key] === value);
 

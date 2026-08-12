@@ -134,6 +134,18 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
       },
     },
     "/kb/{name}/documents/{documentId}": {
+      get: {
+        summary: "Fetch one document's full content (its chunks, rejoined) and metadata",
+        tags: ["RAG"],
+        parameters: [
+          { name: "name", in: "path", required: true, schema: { type: "string" } },
+          { name: "documentId", in: "path", required: true, schema: { type: "integer" } },
+        ],
+        responses: {
+          "200": { description: "{ id, metadata, createdAt, updatedAt, content }" },
+          "404": { description: "KB or document not found" },
+        },
+      },
       put: {
         summary: "Re-sync a document — replace its text (re-chunked + re-embedded) and/or its metadata",
         tags: ["RAG"],

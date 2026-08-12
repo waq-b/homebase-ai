@@ -3,7 +3,9 @@ import {
   addDocument,
   deleteDocument,
   deleteKb,
+  DocumentNotFoundError,
   EmptyDocumentError,
+  getDocument,
   KbModelMismatchError,
   KbNameCollisionError,
   KbNotFoundError,
@@ -132,6 +134,31 @@ describe("per-KB embedding model lock", () => {
     const resultsB = await searchKb(kbB, "different model");
     expect(resultsA).toHaveLength(1);
     expect(resultsB).toHaveLength(1);
+  });
+});
+
+describe("getDocument", () => {
+  it("returns the full rejoined content and metadata for a document", async () => {
+    const kb = freshKbName("get-document");
+    // Two short paragraphs — each stays under the chunking threshold, so the
+    // rejoined content should come back byte-for-byte identical.
+    const text = "First paragraph about dragons.\n\nSecond paragraph about knights.";
+    const { documentId } = await addDocument(kb, text, { metadata: { title: "Test doc" } });
+
+    const detail = await getDocument(kb, documentId);
+    expect(detail.id).toBe(documentId);
+    expect(detail.metadata).toEqual({ title: "Test doc" });
+    expect(detail.content).toBe(text);
+  });
+
+  it("throws DocumentNotFoundError for an unknown document id in an existing KB", async () => {
+    const kb = freshKbName("get-document-404");
+    await addDocument(kb, "Some content to establish the KB.");
+    expect(() => getDocument(kb, 999999)).toThrow(DocumentNotFoundError);
+  });
+
+  it("throws KbNotFoundError for an unknown KB", () => {
+    expect(() => getDocument("test-does-not-exist", 1)).toThrow(KbNotFoundError);
   });
 });
 

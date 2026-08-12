@@ -61,7 +61,9 @@
   --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
 }
 
-body {
+html, body {
+  height: 100%;
+  margin: 0;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-body);
@@ -151,7 +153,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
 
 /* Homebase-specific layout, from Homebase Dashboard.dc.html's inline <style>. */
-body { margin: 0 }
+.hb-app { height: 100%; min-height: 100vh; }
 ::-webkit-scrollbar { width: 10px; height: 10px }
 ::-webkit-scrollbar-thumb { background: var(--color-neutral-300) }
 .hb-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace }
