@@ -38,15 +38,22 @@ curl localhost:3000/kb/manga-kb/documents \
 
 Fixed-size, paragraph-aware (`chunkText` in `src/rag.ts`): splits on blank lines first, then further splits any paragraph over 800 characters into fixed 800-char pieces. Deliberately simple — no semantic chunking, no overlap between chunks.
 
+All of a document's chunks are embedded in **one batched call** (`embedTexts`, see `docs/embeddings.md`) — a real single HTTP round trip to Ollama regardless of chunk count, not one request per chunk. Matters for documents with many chunks and for bulk-ingestion pipelines adding many documents in a row.
+
 ## List documents
 
 ```bash
-curl localhost:3000/kb/manga-kb/documents
+curl "localhost:3000/kb/manga-kb/documents?limit=50&offset=0"
 ```
 
 ```json
-{ "documents": [{ "id": 1, "metadata": {...}, "createdAt": "...", "updatedAt": "...", "chunkCount": 1 }] }
+{ "documents": [{ "id": 1, "metadata": {...}, "createdAt": "...", "updatedAt": "...", "chunkCount": 1 }], "total": 1, "limit": 100, "offset": 0 }
 ```
+
+- `limit` (optional, default 100, max 500)
+- `offset` (optional, default 0)
+
+`total` is the KB's full document count (independent of `limit`/`offset`), so a caller can tell whether it's seen everything. Defaults are generous enough that small/moderate KBs don't need to think about pagination at all — only relevant once a KB grows past ~100 documents.
 
 ## Update a document
 
@@ -78,7 +85,7 @@ Removes the document row, its chunks, and their vectors. `404` if the KB or docu
 ```bash
 curl localhost:3000/kb/manga-kb/search \
   -X POST -H 'content-type: application/json' \
-  -d '{"query":"strongest hunter leveling system","topK":5,"filter":{"genre":"action"}}'
+  -d '{"query":"strongest hunter leveling system","topK":5,"filter":{"genre":"action"},"maxDistance":0.85}'
 ```
 
 ```json
@@ -86,8 +93,11 @@ curl localhost:3000/kb/manga-kb/search \
 ```
 
 - `query` (required)
-- `topK` (optional, default 5)
-- `filter` (optional): **exact-match** key/value pairs checked against each result's `metadata`, e.g. `{"genre":"action"}`. No range queries, no partial match, no OR — just equality on every key given. Applied *after* the vector similarity search (sqlite-vec has no notion of metadata), so a `filter`'d query over-fetches candidates before narrowing down to `topK` matching results.
+- `topK` (optional, default 5, max 500)
+- `filter` (optional): **exact-match** key/value pairs checked against each result's `metadata`, e.g. `{"genre":"action"}`. No range queries, no partial match, no OR — just equality on every key given, and no array-contains (a `genres: string[]` metadata value can't be matched this way — filter client-side on results if you need that). Applied *after* the vector similarity search (sqlite-vec has no notion of metadata).
+- `maxDistance` (optional, no default): drops any result whose distance exceeds this. **Why no default**: sqlite-vec's KNN search always returns the `topK` nearest neighbors even when none of them are actually relevant to the query — there's no built-in "not relevant enough" cutoff, so a query with no real matches still returns *something* unless you supply a threshold. What counts as "relevant" is empirical, though — it depends on the embedding model and the KB's actual content, so Homebase doesn't guess one; calibrate by looking at real distances for known-relevant vs. known-irrelevant queries against your own KB. (Reference data point from a real integration: `0.85` worked well for mangaFinder's manga-metadata KB — genuinely relevant hits landed under ~0.75, off-topic queries only surfaced ~0.96+ — but that's specific to their content/model, not a universal number.)
+
+**Results are always deduplicated to one per document** — the single best (lowest-distance) matching chunk. A document with several chunks that all match a query would otherwise crowd out `topK` with repeats of itself, which was never useful (this used to be something every consumer had to re-solve client-side; now it's Homebase's job). `topK` counts *documents*, not chunks.
 
 `score` is a raw vector distance (lower = closer/more relevant) — not a normalized similarity score. `404` if the KB doesn't exist yet.
 

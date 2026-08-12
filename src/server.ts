@@ -7,7 +7,7 @@ import { AgentConfigError, getAgent, loadAgents } from "./registry.js";
 import { HookError } from "./hooks.js";
 import { InputValidationError, ProviderError, invokeAgent, invokeAgentStream } from "./invoke.js";
 import { buildOpenApiSpec } from "./openapi.js";
-import { embedText } from "./embeddings.js";
+import { embedText, embedTexts } from "./embeddings.js";
 import {
   addDocument,
   deleteDocument,
@@ -131,15 +131,28 @@ app.post("/agents/:name/invoke", async (c) => {
 });
 
 // v2.1 — pure compute, no storage. RAG (below) owns embedding + storage together.
+const embedBodySchema = z
+  .object({
+    text: z.string().min(1).optional(),
+    texts: z.array(z.string().min(1)).min(1).max(2048).optional(),
+    model: z.string().optional(),
+  })
+  .refine((v) => (v.text !== undefined) !== (v.texts !== undefined), {
+    message: "Provide exactly one of text or texts",
+  });
+
 app.post("/embed", async (c) => {
   const parsedBody = await readJsonBody(c);
   if (!parsedBody.ok) return badJson(c);
 
-  const parsed = z.object({ text: z.string().min(1), model: z.string().optional() }).safeParse(parsedBody.body);
+  const parsed = embedBodySchema.safeParse(parsedBody.body);
   if (!parsed.success) return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400);
 
   try {
-    return c.json(await embedText(parsed.data.text, parsed.data.model));
+    if (parsed.data.text !== undefined) {
+      return c.json(await embedText(parsed.data.text, parsed.data.model));
+    }
+    return c.json(await embedTexts(parsed.data.texts!, parsed.data.model));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : "Embedding failed" }, 502);
   }
@@ -176,8 +189,16 @@ app.post("/kb/:name/documents", async (c) => {
   }
 });
 
+const listDocumentsQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(500).optional(),
+  offset: z.coerce.number().int().nonnegative().optional(),
+});
+
 app.get("/kb/:name/documents", (c) => {
-  return c.json({ documents: listDocuments(c.req.param("name")) });
+  const parsed = listDocumentsQuerySchema.safeParse(c.req.query());
+  if (!parsed.success) return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400);
+
+  return c.json(listDocuments(c.req.param("name"), parsed.data));
 });
 
 app.put("/kb/:name/documents/:documentId", async (c) => {
@@ -223,8 +244,9 @@ app.post("/kb/:name/search", async (c) => {
   const parsed = z
     .object({
       query: z.string().min(1),
-      topK: z.number().int().positive().optional(),
+      topK: z.number().int().positive().max(500).optional(),
       filter: z.record(z.unknown()).optional(),
+      maxDistance: z.number().nonnegative().optional(),
     })
     .safeParse(parsedBody.body);
   if (!parsed.success) return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400);
@@ -233,6 +255,7 @@ app.post("/kb/:name/search", async (c) => {
     const results = await searchKb(c.req.param("name"), parsed.data.query, {
       topK: parsed.data.topK,
       filter: parsed.data.filter,
+      maxDistance: parsed.data.maxDistance,
     });
     return c.json({ results });
   } catch (err) {

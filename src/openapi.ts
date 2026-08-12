@@ -20,7 +20,7 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
     },
     "/embed": {
       post: {
-        summary: "Turn text into a vector",
+        summary: "Turn text into a vector (or a batch of texts into vectors, in one call)",
         tags: ["Embeddings"],
         requestBody: {
           required: true,
@@ -28,9 +28,14 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
             "application/json": {
               schema: {
                 type: "object",
-                required: ["text"],
+                description: "Provide exactly one of text or texts",
                 properties: {
-                  text: { type: "string" },
+                  text: { type: "string", description: "Single-text mode -> { vector, model }" },
+                  texts: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Batch mode (one real HTTP call, not a loop) -> { vectors, model }",
+                  },
                   model: { type: "string", description: "Overrides the default embedding model" },
                 },
               },
@@ -38,7 +43,7 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
           },
         },
         responses: {
-          "200": { description: "{ vector: number[], model: string }" },
+          "200": { description: "{ vector, model } for text, or { vectors, model } for texts" },
           "400": { description: "Invalid input" },
           "502": { description: "Provider failure" },
         },
@@ -78,13 +83,31 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
         },
       },
       get: {
-        summary: "List documents in a knowledge base",
+        summary: "List documents in a knowledge base (paginated)",
         tags: ["RAG"],
-        parameters: [{ name: "name", in: "path", required: true, schema: { type: "string" } }],
+        parameters: [
+          { name: "name", in: "path", required: true, schema: { type: "string" } },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer" },
+            description: "Defaults to 100, max 500",
+          },
+          {
+            name: "offset",
+            in: "query",
+            required: false,
+            schema: { type: "integer" },
+            description: "Defaults to 0",
+          },
+        ],
         responses: {
           "200": {
-            description: "{ documents: { id, metadata, createdAt, updatedAt, chunkCount }[] }",
+            description:
+              "{ documents: { id, metadata, createdAt, updatedAt, chunkCount }[], total, limit, offset }",
           },
+          "400": { description: "Invalid input" },
         },
       },
     },
@@ -130,7 +153,8 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
     },
     "/kb/{name}/search": {
       post: {
-        summary: "Similarity search within a knowledge base, with optional metadata filtering",
+        summary:
+          "Similarity search within a knowledge base — always deduplicated to one result per document, optionally narrowed by metadata filter and/or a distance cutoff",
         tags: ["RAG"],
         parameters: [{ name: "name", in: "path", required: true, schema: { type: "string" } }],
         requestBody: {
@@ -142,10 +166,15 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
                 required: ["query"],
                 properties: {
                   query: { type: "string" },
-                  topK: { type: "integer", description: "Defaults to 5" },
+                  topK: { type: "integer", description: "Defaults to 5, max 500" },
                   filter: {
                     type: "object",
                     description: "Exact-match metadata filter, e.g. { genre: \"action\" }",
+                  },
+                  maxDistance: {
+                    type: "number",
+                    description:
+                      "Drop results beyond this distance (lower = closer/more relevant). No default — calibrate empirically per KB/embedding model.",
                   },
                 },
               },
@@ -154,7 +183,7 @@ export const buildOpenApiSpec = (agents: AgentConfig[]) => {
         },
         responses: {
           "200": {
-            description: "{ results: { content, score, chunkIndex, documentId, metadata }[] }",
+            description: "{ results: { content, score, chunkIndex, documentId, metadata }[] } — one per document, best chunk only",
           },
           "400": { description: "Invalid input" },
           "404": { description: "KB not found" },

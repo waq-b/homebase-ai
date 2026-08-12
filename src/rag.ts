@@ -1,6 +1,6 @@
 import { getDb, sanitizeKbName, toVectorBlob } from "./db.js";
 import { DEFAULT_EMBEDDING_MODEL } from "./providers.js";
-import { embedText } from "./embeddings.js";
+import { embedText, embedTexts } from "./embeddings.js";
 
 export class KbNotFoundError extends Error {
   constructor(public readonly kbName: string) {
@@ -120,10 +120,12 @@ export const addDocument = async (
   }
   const modelId = existing?.embeddingModel ?? options.model ?? DEFAULT_EMBEDDING_MODEL;
 
-  // Embed the first chunk up front regardless — for a brand-new KB, its
-  // vector length is also how we learn the model's dimension to size the table.
-  const firstEmbedding = await embedText(chunks[0], modelId);
-  const kb = existing ?? createKbConfig(kbName, modelId, firstEmbedding.vector.length);
+  // One batched call for every chunk (real single HTTP round trip to Ollama,
+  // see embedTexts) instead of one embed call per chunk — for a brand-new
+  // KB, the first vector's length is also how we learn the model's
+  // dimension to size the table.
+  const { vectors } = await embedTexts(chunks, modelId);
+  const kb = existing ?? createKbConfig(kbName, modelId, vectors[0].length);
 
   const db = getDb();
   const documentInfo = db
@@ -137,9 +139,8 @@ export const addDocument = async (
   const insertVector = db.prepare(`INSERT INTO "${kb.vectorTable}" (rowid, embedding) VALUES (?, ?)`);
 
   for (const [index, chunk] of chunks.entries()) {
-    const { vector } = index === 0 ? firstEmbedding : await embedText(chunk, modelId);
     const chunkInfo = insertChunk.run(documentId, kbName, index, chunk);
-    insertVector.run(BigInt(chunkInfo.lastInsertRowid), toVectorBlob(vector));
+    insertVector.run(BigInt(chunkInfo.lastInsertRowid), toVectorBlob(vectors[index]));
   }
 
   return { documentId, chunksAdded: chunks.length, embeddingModel: modelId };
@@ -198,15 +199,16 @@ export const updateDocument = async (
     deleteDocumentChunks(kb, documentId);
 
     const chunks = chunkText(options.text);
+    const { vectors } = await embedTexts(chunks, kb.embeddingModel);
+
     const insertChunk = db.prepare(
       "INSERT INTO kb_chunks (document_id, kb_name, chunk_index, content) VALUES (?, ?, ?, ?)",
     );
     const insertVector = db.prepare(`INSERT INTO "${kb.vectorTable}" (rowid, embedding) VALUES (?, ?)`);
 
     for (const [index, chunk] of chunks.entries()) {
-      const { vector } = await embedText(chunk, kb.embeddingModel);
       const chunkInfo = insertChunk.run(documentId, kbName, index, chunk);
-      insertVector.run(BigInt(chunkInfo.lastInsertRowid), toVectorBlob(vector));
+      insertVector.run(BigInt(chunkInfo.lastInsertRowid), toVectorBlob(vectors[index]));
     }
     chunksAdded = chunks.length;
   }
@@ -240,8 +242,30 @@ export interface DocumentSummary {
   chunkCount: number;
 }
 
-export const listDocuments = (kbName: string): DocumentSummary[] => {
-  const rows = getDb()
+export interface ListDocumentsOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListDocumentsResult {
+  documents: DocumentSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+const DEFAULT_LIST_LIMIT = 100;
+
+export const listDocuments = (kbName: string, options: ListDocumentsOptions = {}): ListDocumentsResult => {
+  const limit = options.limit ?? DEFAULT_LIST_LIMIT;
+  const offset = options.offset ?? 0;
+  const db = getDb();
+
+  const { total } = db
+    .prepare("SELECT COUNT(*) as total FROM kb_documents WHERE kb_name = ?")
+    .get(kbName) as { total: number };
+
+  const rows = db
     .prepare(
       `SELECT kb_documents.id as id, kb_documents.metadata as metadata,
               kb_documents.created_at as createdAt, kb_documents.updated_at as updatedAt,
@@ -250,9 +274,10 @@ export const listDocuments = (kbName: string): DocumentSummary[] => {
        LEFT JOIN kb_chunks ON kb_chunks.document_id = kb_documents.id
        WHERE kb_documents.kb_name = ?
        GROUP BY kb_documents.id
-       ORDER BY kb_documents.id ASC`,
+       ORDER BY kb_documents.id ASC
+       LIMIT ? OFFSET ?`,
     )
-    .all(kbName) as {
+    .all(kbName, limit, offset) as {
     id: number;
     metadata: string | null;
     createdAt: string;
@@ -260,13 +285,15 @@ export const listDocuments = (kbName: string): DocumentSummary[] => {
     chunkCount: number;
   }[];
 
-  return rows.map((row) => ({
+  const documents = rows.map((row) => ({
     id: row.id,
     metadata: row.metadata ? JSON.parse(row.metadata) : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     chunkCount: row.chunkCount,
   }));
+
+  return { documents, total, limit, offset };
 };
 
 const matchesFilter = (metadata: Record<string, unknown>, filter: Record<string, unknown>): boolean =>
@@ -275,6 +302,16 @@ const matchesFilter = (metadata: Record<string, unknown>, filter: Record<string,
 export interface SearchOptions {
   topK?: number;
   filter?: Record<string, unknown>;
+  /**
+   * sqlite-vec's KNN search always returns the K nearest neighbors, even
+   * when none are actually relevant to the query — there's no built-in
+   * "not relevant enough" cutoff. Pass a max distance (lower = closer/more
+   * relevant) to drop anything beyond it. No default here — what counts as
+   * "relevant" depends on the embedding model and the KB's content, so
+   * callers calibrate their own threshold empirically rather than Homebase
+   * guessing one.
+   */
+  maxDistance?: number;
 }
 
 export interface SearchResult {
@@ -286,13 +323,18 @@ export interface SearchResult {
 }
 
 /**
- * Similarity search, optionally narrowed by exact-match metadata filtering
- * (e.g. `{ genre: "action" }`) applied after the vector search. Each KB now
- * has its own vec0 table (see ensureKbConfig/createKbConfig), so — unlike
- * the earlier shared-table version — this doesn't need to over-fetch and
- * filter out other KBs' results; it only over-fetches when a metadata
- * `filter` is given, since sqlite-vec's similarity ranking has no idea about
- * metadata.
+ * Similarity search, always deduplicated to one result per document (the
+ * best/lowest-distance chunk) — a document with several matching chunks
+ * would otherwise crowd out `topK` with repeats of itself, which is never
+ * what a caller wants from a document-level search. Optionally narrowed by
+ * exact-match metadata filtering (e.g. `{ genre: "action" }`) and/or a
+ * `maxDistance` cutoff, both applied after the vector search since
+ * sqlite-vec's ranking has no idea about metadata or relevance cutoffs.
+ *
+ * Each KB has its own vec0 table (see createKbConfig), so this doesn't need
+ * to over-fetch and filter out other KBs' results — it over-fetches purely
+ * to leave enough candidates for dedup/filter/threshold to still surface a
+ * full `topK` unique documents.
  */
 export const searchKb = async (
   kbName: string,
@@ -306,7 +348,9 @@ export const searchKb = async (
   const { vector } = await embedText(query, kb.embeddingModel);
 
   const db = getDb();
-  const candidatePool = options.filter ? Math.max(topK * 20, 50) : topK;
+  // Dedup alone can shrink several chunks down to one result, so this always
+  // over-fetches — not just when a metadata filter is given.
+  const candidatePool = Math.max(topK * 20, 50);
   const rows = db
     .prepare(`SELECT rowid as id, distance FROM "${kb.vectorTable}" WHERE embedding MATCH ? AND k = ? ORDER BY distance`)
     .all(toVectorBlob(vector), candidatePool) as { id: number; distance: number }[];
@@ -319,16 +363,24 @@ export const searchKb = async (
   );
 
   const results: SearchResult[] = [];
+  const seenDocuments = new Set<number>();
+
   for (const row of rows) {
     if (results.length >= topK) break;
+    if (options.maxDistance !== undefined && row.distance > options.maxDistance) break;
+
     const chunk = getChunkWithDoc.get(row.id) as
       | { content: string; chunkIndex: number; documentId: number; metadata: string | null }
       | undefined;
     if (!chunk) continue;
+    // Rows arrive pre-sorted by distance ascending, so the first chunk seen
+    // for a document is already its best-scoring one.
+    if (seenDocuments.has(chunk.documentId)) continue;
 
     const metadata = chunk.metadata ? JSON.parse(chunk.metadata) : {};
     if (options.filter && !matchesFilter(metadata, options.filter)) continue;
 
+    seenDocuments.add(chunk.documentId);
     results.push({
       content: chunk.content,
       score: row.distance,
