@@ -25,7 +25,7 @@ curl localhost:3000/kb
 ```
 
 ```json
-{ "kbs": [{ "name": "manga-kb", "embeddingModel": "nomic-embed-text", "dimension": 768, "documentCount": 12, "chunkCount": 34 }] }
+{ "kbs": [{ "name": "manga-kb", "embeddingModel": "voyage-4-lite", "dimension": 1024, "documentCount": 12, "chunkCount": 34 }] }
 ```
 
 ```bash
@@ -44,7 +44,7 @@ curl localhost:3000/kb/manga-kb/documents \
 ```
 
 ```json
-{ "documentId": 1, "chunksAdded": 1, "embeddingModel": "nomic-embed-text" }
+{ "documentId": 1, "chunksAdded": 1, "embeddingModel": "voyage-4-lite" }
 ```
 
 - `text` (required): chunked and embedded automatically — no separate embed step needed.
@@ -55,7 +55,7 @@ curl localhost:3000/kb/manga-kb/documents \
 
 Fixed-size, paragraph-aware (`chunkText` in `src/rag.ts`): splits on blank lines first, then further splits any paragraph over 800 characters into fixed 800-char pieces. Deliberately simple — no semantic chunking, no overlap between chunks.
 
-All of a document's chunks are embedded in **one batched call** (`embedTexts`, see `docs/embeddings.md`) — a real single HTTP round trip to Ollama regardless of chunk count, not one request per chunk. Matters for documents with many chunks and for bulk-ingestion pipelines adding many documents in a row.
+All of a document's chunks are embedded in **one batched call** (`embedTexts`, see `docs/embeddings.md`) — a real single HTTP round trip to Voyage regardless of chunk count, not one request per chunk. Matters for documents with many chunks and for bulk-ingestion pipelines adding many documents in a row.
 
 ## List documents
 
@@ -112,7 +112,7 @@ curl localhost:3000/kb/manga-kb/search \
 - `query` (required)
 - `topK` (optional, default 5, max 500)
 - `filter` (optional): **exact-match** key/value pairs checked against each result's `metadata`, e.g. `{"genre":"action"}`. No range queries, no partial match, no OR — just equality on every key given, and no array-contains (a `genres: string[]` metadata value can't be matched this way — filter client-side on results if you need that). Applied *after* the vector similarity search (sqlite-vec has no notion of metadata).
-- `maxDistance` (optional, no default): drops any result whose distance exceeds this. **Why no default**: sqlite-vec's KNN search always returns the `topK` nearest neighbors even when none of them are actually relevant to the query — there's no built-in "not relevant enough" cutoff, so a query with no real matches still returns *something* unless you supply a threshold. What counts as "relevant" is empirical, though — it depends on the embedding model and the KB's actual content, so Homebase doesn't guess one; calibrate by looking at real distances for known-relevant vs. known-irrelevant queries against your own KB. (Reference data point from a real integration: `0.85` worked well for mangaFinder's manga-metadata KB — genuinely relevant hits landed under ~0.75, off-topic queries only surfaced ~0.96+ — but that's specific to their content/model, not a universal number.)
+- `maxDistance` (optional, no default): drops any result whose distance exceeds this. **Why no default**: sqlite-vec's KNN search always returns the `topK` nearest neighbors even when none of them are actually relevant to the query — there's no built-in "not relevant enough" cutoff, so a query with no real matches still returns *something* unless you supply a threshold. What counts as "relevant" is empirical, though — it depends on the embedding model and the KB's actual content, so Homebase doesn't guess one; calibrate by looking at real distances for known-relevant vs. known-irrelevant queries against your own KB. (Reference data point from a real integration: `0.85` worked well for mangaFinder's manga-metadata KB under the old `nomic-embed-text` embeddings — genuinely relevant hits landed under ~0.75, off-topic queries only surfaced ~0.96+. **Stale as of the Voyage AI switch** — different embedding model means a different distance distribution, so this needs recalibrating against real Voyage-embedded content before trusting `0.85` again.)
 
 **Results are always deduplicated to one per document** — the single best (lowest-distance) matching chunk. A document with several chunks that all match a query would otherwise crowd out `topK` with repeats of itself, which was never useful (this used to be something every consumer had to re-solve client-side; now it's Homebase's job). `topK` counts *documents*, not chunks.
 
@@ -125,12 +125,10 @@ A KB's embedding model is decided once — by whichever call is the *first* to w
 ```bash
 curl localhost:3000/kb/premium-kb/documents \
   -X POST -H 'content-type: application/json' \
-  -d '{"text":"...", "model":"mxbai-embed-large"}'
+  -d '{"text":"...", "model":"voyage-4"}'
 ```
 
-If a later call to the same (already-existing) KB passes a *different* `model`, it's rejected with `400` — mixing dimensions in one vector table isn't possible, and silently ignoring the override would be more confusing than an explicit error. Use a new KB name to start over with a different model. Omit `model` entirely to use the default (`nomic-embed-text`).
-
-Verified: two KBs (`nomic-embed-text` @ 768-dim and `mxbai-embed-large` @ 1024-dim) coexisting and both searching correctly.
+If a later call to the same (already-existing) KB passes a *different* `model`, it's rejected with `400` — mixing dimensions in one vector table isn't possible, and silently ignoring the override would be more confusing than an explicit error. Use a new KB name to start over with a different model. Omit `model` entirely to use the default (`voyage-4-lite`). `model` must now be a Voyage model id (e.g. `voyage-4`, `voyage-4-large`, `voyage-code-3`) — Ollama model ids like the old `mxbai-embed-large` example no longer work, since all embedding calls route through Voyage's API (`src/providers.ts`).
 
 ## Errors
 
@@ -139,4 +137,4 @@ Verified: two KBs (`nomic-embed-text` @ 768-dim and `mxbai-embed-large` @ 1024-d
 | Missing/empty `text` or `query`, invalid KB name | `400`, Zod issues or message |
 | KB already uses a different embedding model | `400` |
 | KB or document not found | `404` |
-| Embedding call fails (Ollama unreachable, etc.) | `502` |
+| Embedding call fails (Voyage unreachable, `VOYAGE_API_KEY` unset, etc.) | `502` |

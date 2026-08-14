@@ -19,7 +19,7 @@ curl localhost:3000/embed \
 ```
 
 ```json
-{ "vector": [0.123, -0.045, ...], "model": "nomic-embed-text" }
+{ "vector": [0.123, -0.045, ...], "model": "voyage-4-lite" }
 ```
 
 **Batch:**
@@ -31,10 +31,10 @@ curl localhost:3000/embed \
 ```
 
 ```json
-{ "vectors": [[0.12, ...], [0.08, ...], [0.31, ...]], "model": "nomic-embed-text" }
+{ "vectors": [[0.12, ...], [0.08, ...], [0.31, ...]], "model": "voyage-4-lite" }
 ```
 
-`vectors[i]` corresponds to `texts[i]` — order preserved, one vector per input string. Batch mode is a **real single HTTP call** to Ollama's `/api/embed` (which natively accepts an array of inputs), not a loop of individual embed calls — `embedTexts` in `src/embeddings.ts` via the AI SDK's `embedMany()`. Up to 2048 texts per call (`ollama-ai-provider`'s `maxEmbeddingsPerCall` default); there's no Homebase-level cap beyond that.
+`vectors[i]` corresponds to `texts[i]` — order preserved, one vector per input string. Batch mode is a **real single HTTP call** to Voyage's `/v1/embeddings` (which natively accepts an array of inputs), not a loop of individual embed calls — `embedTexts` in `src/embeddings.ts` via the AI SDK's `embedMany()`. Up to 1,000 texts per call (Voyage's per-request max, set as `maxEmbeddingsPerCall` on the hand-rolled model in `src/providers.ts` — see "Model" below); there's no Homebase-level cap beyond that.
 
 RAG's `addDocument`/`updateDocument` (`docs/rag.md`) use this internally to embed all of a document's chunks in one round trip, instead of one request per chunk.
 
@@ -43,13 +43,9 @@ RAG's `addDocument`/`updateDocument` (`docs/rag.md`) use this internally to embe
 
 ## Model
 
-Default model is `nomic-embed-text` (768-dimensional), configurable via the `EMBEDDING_MODEL` env var. Pulled locally via Ollama:
+Default model is `voyage-4-lite` (1024-dimensional by default; Voyage supports requesting 2048/1024/512/256 via `output_dimension`, not currently exposed through Homebase), configurable via the `EMBEDDING_MODEL` env var. Requires `VOYAGE_API_KEY` (get one at [dash.voyageai.com](https://dash.voyageai.com) — 200M free tokens, one-time grant, then $0.02-0.12/M depending on model tier).
 
-```bash
-ollama pull nomic-embed-text
-```
-
-Provider mapping goes through `ollama-ai-provider`'s `.embedding(modelId)` (`src/providers.ts`, `getEmbeddingModel`); the AI SDK's `embed()`/`embedMany()` functions do the actual call (`src/embeddings.ts`).
+**Not routed through Ollama** — Ollama Cloud (the default `provider: ollama` chat backend as of the previous session) doesn't serve embedding models at all (confirmed: a live call to its `/api/embed` returns `401`), and there's no local/LAN Ollama box available right now as an alternative. There's also no official AI-SDK provider package usable here: `@ai-sdk/voyage` depends on `@ai-sdk/provider@4.x`, incompatible with this project's `ai@4.3.19` (`@ai-sdk/provider@1.x`). So `getEmbeddingModel` (`src/providers.ts`) is a small hand-rolled `EmbeddingModelV1<string>` implementation calling Voyage's plain REST API (`https://api.voyageai.com/v1/embeddings`) directly — the AI SDK's `embed()`/`embedMany()` functions call it exactly like any other provider (`src/embeddings.ts`), no special-casing needed there.
 
 **Note on RAG use:** each knowledge base (`/kb/*`) gets its own dedicated vector table, sized to whichever model *first* wrote to that KB — see `docs/rag.md`'s "Embedding model override" section. There's no single fixed dimension across all KBs; `/embed` used standalone has no dimension constraint at all, any model works.
 
@@ -58,4 +54,4 @@ Provider mapping goes through `ollama-ai-provider`'s `.embedding(modelId)` (`src
 | Condition | Status |
 |---|---|
 | Missing both `text` and `texts`, or both given, or empty string(s) | `400`, Zod issues |
-| Ollama unreachable or model not pulled | `502` |
+| Voyage unreachable, `VOYAGE_API_KEY` unset, or bad model id | `502` |

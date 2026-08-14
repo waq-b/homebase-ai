@@ -3,6 +3,44 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { EmbeddingModel, LanguageModel } from "ai";
 import type { AgentConfig } from "./config.js";
 
+interface VoyageEmbeddingResponse {
+  data: { embedding: number[]; index: number }[];
+  usage: { total_tokens: number };
+}
+
+/**
+ * No AI-SDK provider package for Voyage is usable here: `@ai-sdk/voyage`
+ * depends on `@ai-sdk/provider@4.x`, while this project's `ai@4.3.19` is on
+ * `@ai-sdk/provider@1.x` — incompatible `EmbeddingModel` shapes. Hand-rolled
+ * against Voyage's plain REST API instead (https://docs.voyageai.com),
+ * implementing just enough of `EmbeddingModelV1<string>` for `embed`/
+ * `embedMany` (src/embeddings.ts) to work against it unmodified.
+ */
+const voyageEmbeddingModel = (modelId: string): EmbeddingModel<string> => ({
+  specificationVersion: "v1",
+  provider: "voyage",
+  modelId,
+  maxEmbeddingsPerCall: 1000,
+  supportsParallelCalls: true,
+  doEmbed: async ({ values, abortSignal, headers }) => {
+    const apiKey = process.env.VOYAGE_API_KEY;
+    if (!apiKey) throw new Error("VOYAGE_API_KEY is not set");
+
+    const res = await fetch("https://api.voyageai.com/v1/embeddings", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({ input: values, model: modelId }),
+      signal: abortSignal,
+    });
+    if (!res.ok) {
+      throw new Error(`Voyage embeddings request failed: ${res.status} ${await res.text()}`);
+    }
+    const body = (await res.json()) as VoyageEmbeddingResponse;
+    const embeddings = [...body.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
+    return { embeddings, usage: { tokens: body.usage.total_tokens } };
+  },
+});
+
 const ollama = createOllama({
   // Defaults to Ollama Cloud (https://ollama.com/api) rather than a local
   // install — swap OLLAMA_BASE_URL to http://localhost:11434/api once a
@@ -34,10 +72,13 @@ const DEFAULT_FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL ?? "openai/
 export const getFallbackModel = (modelId?: string): LanguageModel | undefined =>
   process.env.OPENROUTER_API_KEY ? getOpenrouter()(modelId ?? DEFAULT_FALLBACK_MODEL) : undefined;
 
-export const DEFAULT_EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? "nomic-embed-text";
+// Voyage, not Ollama: Ollama Cloud (this file's default `ollama` client)
+// doesn't serve embedding models (confirmed via a live 401) — there's no
+// local/LAN Ollama box available as an alternative right now either.
+export const DEFAULT_EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? "voyage-4-lite";
 
 export const getEmbeddingModel = (modelId: string = DEFAULT_EMBEDDING_MODEL): EmbeddingModel<string> =>
-  ollama.embedding(modelId);
+  voyageEmbeddingModel(modelId);
 
 /**
  * Maps an agent's provider/model config to a runnable AI SDK model instance.
