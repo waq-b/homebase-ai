@@ -35,16 +35,25 @@ app.use("*", cors());
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+// Bare root has nothing of its own — send visitors somewhere useful.
+app.get("/", (c) => c.redirect("/dashboard"));
+
 // Bearer-token auth: only enforced when HOMEBASE_API_KEY is set, so local
 // dev (no env var) stays open while a public deploy requires the header.
-// /health and the dashboard's static shell (HTML/JS/CSS, no data in them)
-// are exempt — the dashboard prompts for the key client-side and attaches
-// it to its own API calls, which stay gated normally. Without this
-// exemption, setting the key would 401 the page you'd need to enter it on.
+// /health, "/" (just a redirect, no data), and the dashboard's static shell
+// (HTML/JS/CSS, no data in them) are exempt — the dashboard prompts for the
+// key client-side and attaches it to its own API calls, which stay gated
+// normally. Without this exemption, setting the key would 401 the page
+// you'd need to enter it on.
 const apiKey = process.env.HOMEBASE_API_KEY;
 if (apiKey) {
   app.use("*", async (c, next) => {
-    if (c.req.path === "/health" || c.req.path === "/dashboard" || c.req.path.startsWith("/dashboard/")) {
+    if (
+      c.req.path === "/health" ||
+      c.req.path === "/" ||
+      c.req.path === "/dashboard" ||
+      c.req.path.startsWith("/dashboard/")
+    ) {
       return next();
     }
     const header = c.req.header("Authorization");
