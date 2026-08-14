@@ -13,7 +13,7 @@ This README covers quickstart/getting started. For deep reference on any feature
 - [`docs/memory.md`](./docs/memory.md) — conversation memory via `conversationId`, `GET`/`DELETE /memory/:id`
 - [`docs/mcp.md`](./docs/mcp.md) — declaring external MCP servers on an agent
 - [`docs/dashboard.md`](./docs/dashboard.md) — the web dashboard at `GET /dashboard`
-- [`docs/deploy.md`](./docs/deploy.md) — running Homebase on a public VPS (Docker, auth, HTTPS)
+- [`docs/deploy.md`](./docs/deploy.md) — reaching Homebase remotely via Tailscale (no public deploy)
 
 ## Quickstart
 
