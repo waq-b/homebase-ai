@@ -13,5 +13,5 @@
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["src", "agents", "tools"]
+  "include": ["src", "agents", "tools", "examples"]
 }

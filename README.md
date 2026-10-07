@@ -45,8 +45,9 @@ flowchart LR
 
 ```
 src/                core service (server, registry, invoke, providers, rag, memory, mcp, openapi)
-agents/             example agents: YAML + optional hooks
+agents/             built-in agents: YAML + optional hooks (translator, meeting-notes, code-reviewer, page-summarizer, ...)
 tools/              shared AI SDK tools usable from any agent's hooks
+examples/manga/     a real app's agents (search, recommend, log) kept as a worked example
 mcp-servers/        small standalone MCP server used to demo the MCP client
 public/dashboard/   static dashboard (no build step)
 homebase-client/    typed client package for apps that call Homebase
@@ -110,7 +111,7 @@ npm run typecheck
 npm run test:unit
 ```
 
-`npm run test:unit` is what CI runs: 49 unit tests (config/schema validation, invoke pipeline, registry isolation, RAG chunking and logic, memory, MCP cleanup, agent hooks) that use mocked models and need no network or keys. `homebase-client` has its own typecheck, 7 tests and build, also run in CI.
+`npm run test:unit` is what CI runs: 53 unit tests (config/schema validation, invoke pipeline, registry isolation, RAG chunking and logic, memory, MCP cleanup, agent hooks) that use mocked models and need no network or keys. `homebase-client` has its own typecheck, 7 tests and build, also run in CI.
 
 `*.integration.test.ts` (currently the RAG tests) call the real Voyage embeddings API and need `VOYAGE_API_KEY`. They are **not** run in CI, and `npm test` includes them. Nothing in CI exercises a live model call, so provider behaviour (Ollama, OpenRouter, Voyage) is verified manually only.
 
@@ -128,7 +129,7 @@ npm run test:unit
 
 ## Status
 
-A working personal project built for single-user, single-machine use. Auth is a single shared bearer token; there is no multi-tenancy, rate limiting or request logging. The example agents in `agents/` (manga lookup, summarizers, an MCP demo) exist to exercise the platform. The macOS menu-bar app in `toolbar-app/` is macOS-only and not built in CI.
+A working personal project built for single-user, single-machine use. Auth is a single shared bearer token; there is no multi-tenancy, rate limiting or request logging. The agents in `agents/` (translator, meeting notes, code reviewer, page summariser, summarisers, an MCP demo) exist to exercise the platform, and `examples/manga/` holds the agents of a real app built on it. The macOS menu-bar app in `toolbar-app/` is macOS-only and not built in CI.
 
 ## License
 

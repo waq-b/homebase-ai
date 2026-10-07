@@ -1,0 +1,14 @@
+name: page-summarizer
+description: Takes a URL, fetches the page with a tool and summarises it in a few bullet points
+provider: ollama
+model: gpt-oss:120b
+system: |
+  The user message is a URL. Call the fetchPageText tool with it, then
+  summarise the page in at most five short bullet points. If the fetch fails,
+  say so plainly instead of guessing what the page contains.
+input:
+  type: string
+hooks: ./page-summarizer.hooks.ts
+params:
+  temperature: 0.2
+  maxTokens: 1200

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const MAX_CHARS = 8000;
 
-/** Crude HTML-to-text: strips script/style blocks, tags, and collapses whitespace. Good enough for T&Cs pages — not a real readability extractor. */
+/** Crude HTML-to-text: strips script/style blocks, tags, and collapses whitespace. Good enough for simple pages — not a real readability extractor. */
 const stripHtml = (html: string): string =>
   html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -15,9 +15,9 @@ const stripHtml = (html: string): string =>
     .trim();
 
 /**
- * Generic URL-to-text tool — no domain awareness, unlike tools/mangaMetadataSearch.ts. Used by
+ * Generic URL-to-text tool — no domain awareness, unlike the domain-specific tools in examples/. Used by
  * agents that should accept a URL instead of pasted text. Truncates long
- * pages (T&Cs pages are usually short; this is a safety cap, not a real limit in practice).
+ * pages (this is a safety cap against huge pages, not a precise limit).
  */
 export const fetchPageText = tool({
   description: "Fetches a URL and returns its visible page text (HTML stripped), truncated to a safe length.",

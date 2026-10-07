@@ -1,0 +1,24 @@
+name: meeting-notes
+description: Turns a meeting transcript into a summary, decisions and action items, returned as validated JSON
+provider: ollama
+model: gpt-oss:20b
+system: |
+  The user message is a JSON object: {"transcript": string, "attendees": string[], "project": string | null}.
+  Return ONLY a JSON object, with no code fences and no commentary, in exactly this shape:
+  {"summary": string, "decisions": string[], "actionItems": [{"owner": string, "task": string, "due": string | null}]}
+  Owners must come from "attendees". Use null for "due" when no date was stated.
+  Do not invent decisions or action items that are not in the transcript.
+input:
+  type: object
+  shape:
+    transcript: string
+    attendees:
+      type: array
+      items: string
+    project:
+      type: string
+      nullable: true
+hooks: ./meeting-notes.hooks.ts
+params:
+  temperature: 0.1
+  maxTokens: 2000

@@ -1,4 +1,4 @@
-import type { InvokeContext } from "../src/hooks.js";
+import type { InvokeContext } from "../../src/hooks.js";
 
 interface RankedCandidate {
   title?: unknown;
@@ -6,10 +6,10 @@ interface RankedCandidate {
 }
 
 /**
- * Deterministic backstop for the reading-list exclusion ticket: qwen2.5:14b
+ * Deterministic backstop for the reading-list exclusion rule: qwen2.5:14b
  * doesn't reliably comply with "never include a candidate already in
  * readingList" from prompting alone (reproduced 0/8 across two different
- * prompt strategies — see the ticket). Rather than keep chasing prompt
+ * prompt strategies). Rather than keep chasing prompt
  * wording, afterInvoke strips any readingList match out of the model's
  * output after the fact — the model still does the actual ranking/scoring
  * (it's fine at that part), this just guarantees the hard constraint holds

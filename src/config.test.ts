@@ -38,7 +38,7 @@ describe("inputPayloadSchema — type: messages", () => {
 });
 
 describe("inputPayloadSchema — type: object, flat shorthand", () => {
-  // Real shape from agents/manga-search.yaml
+  // Real shape from examples/manga/manga-search.yaml
   const schema = inputPayloadSchema({
     type: "object",
     shape: { query: "string", genre: "string", format: "string", limit: "number" },
@@ -145,7 +145,7 @@ describe("inputPayloadSchema — type: object, array-of-object field", () => {
 });
 
 describe("inputPayloadSchema — deeply nested: array of object containing another array", () => {
-  // Real shape from agents/manga-recommend.yaml's `candidates` field.
+  // Real shape from examples/manga/manga-recommend.yaml's `candidates` field.
   const schema = inputPayloadSchema({
     type: "object",
     shape: {
@@ -177,7 +177,7 @@ describe("inputPayloadSchema — deeply nested: array of object containing anoth
   });
 });
 
-describe("inputPayloadSchema — real fixture: agents/manga-recommend.yaml's full shape", () => {
+describe("inputPayloadSchema — real fixture: examples/manga/manga-recommend.yaml's full shape", () => {
   const shape: NonNullable<Extract<AgentConfig["input"], { type: "object" }>["shape"]> = {
     query: "string",
     candidates: {

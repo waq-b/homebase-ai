@@ -4,7 +4,7 @@ Deep reference for the `/kb/*` routes (`src/rag.ts`), added in v2.2 and extended
 
 ## What it's for
 
-Homebase-hosted retrieval: apps create named knowledge bases (e.g. `"manga-kb"`, `"homebase-docs-kb"`), push documents in, and query by similarity search. KBs are namespaced by name — no cross-KB search.
+Homebase-hosted retrieval: apps create named knowledge bases (e.g. `"notes-kb"`, `"homebase-docs-kb"`), push documents in, and query by similarity search. KBs are namespaced by name — no cross-KB search.
 
 ## Storage
 
@@ -25,11 +25,11 @@ curl localhost:3000/kb
 ```
 
 ```json
-{ "kbs": [{ "name": "manga-kb", "embeddingModel": "voyage-4-lite", "dimension": 1024, "documentCount": 12, "chunkCount": 34 }] }
+{ "kbs": [{ "name": "notes-kb", "embeddingModel": "voyage-4-lite", "dimension": 1024, "documentCount": 12, "chunkCount": 34 }] }
 ```
 
 ```bash
-curl -X DELETE localhost:3000/kb/manga-kb
+curl -X DELETE localhost:3000/kb/notes-kb
 # { "deleted": true }
 ```
 
@@ -38,9 +38,9 @@ Drops the KB's dedicated vector table, every document/chunk row, and its `kb_con
 ## Add a document
 
 ```bash
-curl localhost:3000/kb/manga-kb/documents \
+curl localhost:3000/kb/notes-kb/documents \
   -X POST -H 'content-type: application/json' \
-  -d '{"text":"Solo Leveling is a manhwa about...", "metadata":{"title":"Solo Leveling","genre":"action"}}'
+  -d '{"text":"Onboarding guide: how new teammates get set up...", "metadata":{"title":"Onboarding guide","category":"guide"}}'
 ```
 
 ```json
@@ -60,7 +60,7 @@ All of a document's chunks are embedded in **one batched call** (`embedTexts`, s
 ## List documents
 
 ```bash
-curl "localhost:3000/kb/manga-kb/documents?limit=50&offset=0"
+curl "localhost:3000/kb/notes-kb/documents?limit=50&offset=0"
 ```
 
 ```json
@@ -75,9 +75,9 @@ curl "localhost:3000/kb/manga-kb/documents?limit=50&offset=0"
 ## Update a document
 
 ```bash
-curl localhost:3000/kb/manga-kb/documents/1 \
+curl localhost:3000/kb/notes-kb/documents/1 \
   -X PUT -H 'content-type: application/json' \
-  -d '{"text":"...updated synopsis...", "metadata":{"title":"Solo Leveling","genre":"action","status":"completed"}}'
+  -d '{"text":"...updated guide text...", "metadata":{"title":"Onboarding guide","category":"guide","status":"reviewed"}}'
 ```
 
 ```json
@@ -91,7 +91,7 @@ This is the "re-sync a stale entry" path — there's no diffing, an update fully
 ## Delete a document
 
 ```bash
-curl -X DELETE localhost:3000/kb/manga-kb/documents/1
+curl -X DELETE localhost:3000/kb/notes-kb/documents/1
 # { "deleted": true }
 ```
 
@@ -100,9 +100,9 @@ Removes the document row, its chunks, and their vectors. `404` if the KB or docu
 ## Search
 
 ```bash
-curl localhost:3000/kb/manga-kb/search \
+curl localhost:3000/kb/notes-kb/search \
   -X POST -H 'content-type: application/json' \
-  -d '{"query":"strongest hunter leveling system","topK":5,"filter":{"genre":"action"},"maxDistance":0.85}'
+  -d '{"query":"how do I set up my laptop","topK":5,"filter":{"category":"guide"},"maxDistance":0.85}'
 ```
 
 ```json
@@ -111,7 +111,7 @@ curl localhost:3000/kb/manga-kb/search \
 
 - `query` (required)
 - `topK` (optional, default 5, max 500)
-- `filter` (optional): **exact-match** key/value pairs checked against each result's `metadata`, e.g. `{"genre":"action"}`. No range queries, no partial match, no OR — just equality on every key given, and no array-contains (a `genres: string[]` metadata value can't be matched this way — filter client-side on results if you need that). Applied *after* the vector similarity search (sqlite-vec has no notion of metadata).
+- `filter` (optional): **exact-match** key/value pairs checked against each result's `metadata`, e.g. `{"category":"guide"}`. No range queries, no partial match, no OR — just equality on every key given, and no array-contains (a `tags: string[]` metadata value can't be matched this way — filter client-side on results if you need that). Applied *after* the vector similarity search (sqlite-vec has no notion of metadata).
 - `maxDistance` (optional, no default): drops any result whose distance exceeds this. **Why no default**: sqlite-vec's KNN search always returns the `topK` nearest neighbors even when none of them are actually relevant to the query — there's no built-in "not relevant enough" cutoff, so a query with no real matches still returns *something* unless you supply a threshold. What counts as "relevant" is empirical, though — it depends on the embedding model and the KB's actual content, so Homebase doesn't guess one; calibrate by looking at real distances for known-relevant vs. known-irrelevant queries against your own KB. (Earlier calibration numbers came from a different embedding model and no longer apply; recalibrate against your own Voyage-embedded content.)
 
 **Results are always deduplicated to one per document** — the single best (lowest-distance) matching chunk. A document with several chunks that all match a query would otherwise crowd out `topK` with repeats of itself, which was never useful (this used to be something every consumer had to re-solve client-side; now it's Homebase's job). `topK` counts *documents*, not chunks.

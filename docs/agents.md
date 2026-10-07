@@ -92,7 +92,7 @@ shape:
 
 `FieldSpec` is recursive (`z.lazy` in `src/config.ts`) — `array`/`object` fields nest without depth limit. All fields are required unless marked `nullable` (there's no separate `optional`; a field is either present-and-typed, or present-and-`type | null`).
 
-See `agents/manga-search.yaml` for a flat example and `agents/manga-recommend.yaml` for a fully nested one.
+See `agents/translator.yaml` for a flat example, `agents/meeting-notes.yaml` for arrays and nullable fields, and `examples/manga/manga-recommend.yaml` for a fully nested one.
 
 ## Provider mapping
 

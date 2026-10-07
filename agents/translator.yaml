@@ -1,0 +1,20 @@
+name: translator
+description: Translates text into a target language, optionally in a requested tone
+provider: ollama
+model: gpt-oss:20b
+system: |
+  The user message is a JSON object: {"text": string, "targetLanguage": string, "tone": string | null}.
+  Translate "text" into "targetLanguage". If "tone" is not null, match it
+  (for example "formal" or "casual"). Return only the translation, with no
+  commentary and no quotation marks around it.
+input:
+  type: object
+  shape:
+    text: string
+    targetLanguage: string
+    tone:
+      type: string
+      nullable: true
+params:
+  temperature: 0.2
+  maxTokens: 1500

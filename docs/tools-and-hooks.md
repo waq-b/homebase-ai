@@ -27,9 +27,9 @@ Runs after input validation, before the input is turned into model messages. Ret
 
 Runs on the model's full text output, **plain (non-streaming) path only** — see `docs/invoke.md` for why streaming skips it. Return value replaces the response's `output` field.
 
-**Pattern: deterministic backstop for a constraint the model won't reliably follow.** Small local models don't always comply with hard constraints from prompting alone, even with an explicit rule and a worked example — `agents/manga-recommend.hooks.ts` is a live example: the system prompt tells the model to never output a candidate already in the user's reading list, but that alone measured 0/8 compliance on a repeatable test case. Rather than keep tuning the prompt, `afterInvoke` parses the model's JSON output (using `ctx.input` to see the original `readingList`) and deterministically strips any match — the model still does the actual ranking/scoring, the hook just guarantees the hard constraint holds regardless of what the model does. Worth reaching for whenever a constraint is easy to check in code but unreliable to enforce purely through prompting.
+**Pattern: deterministic backstop for a constraint the model won't reliably follow.** Small local models don't always comply with hard constraints from prompting alone, even with an explicit rule and a worked example — `examples/manga/manga-recommend.hooks.ts` is a live example: the system prompt tells the model to never output a candidate already in the user's reading list, but that alone measured 0/8 compliance on a repeatable test case. Rather than keep tuning the prompt, `afterInvoke` parses the model's JSON output (using `ctx.input` to see the original `readingList`) and deterministically strips any match — the model still does the actual ranking/scoring, the hook just guarantees the hard constraint holds regardless of what the model does. Worth reaching for whenever a constraint is easy to check in code but unreliable to enforce purely through prompting.
 
-**Pattern: validating a JSON-output agent's shape.** Homebase itself does no schema validation or retry on an agent's raw text output (a deliberate scope decision — see the "structured-output validation" ticket's design doc: no genuine malformed-JSON failure has actually been observed, only semantic ones like the exclusion bug above, which retrying wouldn't fix anyway). If an agent's contract depends on valid JSON matching a specific shape, validate it in `afterInvoke` — parse, check against a Zod schema, throw on failure:
+**Pattern: validating a JSON-output agent's shape.** Homebase itself does no schema validation or retry on an agent's raw text output (a deliberate scope decision: no genuine malformed-JSON failure has been observed, only semantic ones like the exclusion bug above, which retrying wouldn't fix anyway). If an agent's contract depends on valid JSON matching a specific shape, validate it in `afterInvoke` — parse, check against a Zod schema, throw on failure:
 
 ```ts
 const outputSchema = z.array(z.object({ action: z.string(), title: z.string(), /* ... */ }));
@@ -67,8 +67,8 @@ Two behavioral consequences of declaring `tools`, both driven from `src/provider
 
 ```
 tools/
-├── webSearch.ts           # generic DuckDuckGo-backed search — agents/researcher.yaml
-└── mangaMetadataSearch.ts # manga/manhwa/manhua metadata (MangaDex, AniList, MangaUpdates) — agents/manga-search.yaml
+├── webSearch.ts      # generic DuckDuckGo-backed search — agents/researcher.yaml
+└── fetchPageText.ts  # fetch a URL and return its visible text — agents/page-summarizer.yaml
 ```
 
 Any agent's `hooks.ts` can import any file in `tools/` — there's no per-agent tool registration beyond the import.
@@ -83,16 +83,11 @@ export const webSearch = tool({
 });
 ```
 
-**Known limitation:** DuckDuckGo's Instant Answer API is sparse for anything outside broad encyclopedic topics (it often returns no abstract text for niche or specific queries, and never returns a source URL) — and its HTML search endpoint (a tempting keyless alternative) hard-blocks with a 403 after a single request, so it's not a viable swap either. Fine for `researcher`'s demo purpose; **not** a good fit for anything needing real, domain-specific grounding — see `tools/mangaMetadataSearch.ts` below for how `manga-search` moved off it.
+**Known limitation:** DuckDuckGo's Instant Answer API is sparse for anything outside broad encyclopedic topics (it often returns no abstract text for niche or specific queries, and never returns a source URL) — and its HTML search endpoint (a tempting keyless alternative) hard-blocks with a 403 after a single request, so it's not a viable swap either. Fine for `researcher`'s demo purpose; **not** a good fit for anything needing real, domain-specific grounding — see `examples/manga/tools/mangaMetadataSearch.ts` for how a domain-specific agent moved off it.
 
-**`tools/mangaMetadataSearch.ts`**: purpose-built replacement for `manga-search`, after `webSearch` was confirmed both non-functional (DuckDuckGo returning empty responses in practice) and a poor fit even when working (no manga/anime awareness). Three sources, tried in order until one returns results:
-1. [MangaDex](https://api.mangadex.org) — strongest niche/indie coverage, title-matched search.
-2. [AniList](https://graphql.anilist.co) — broader mainstream coverage, also title-matched.
-3. [MangaUpdates](https://api.mangaupdates.com) — full-text search over descriptions, not titles. This is the one that actually answers thematic/vibe queries ("villainess otome revenge") that title-only matching misses entirely — added after that exact gap was found and confirmed via direct API calls. No content-rating filter exists on this endpoint (unlike MangaDex's), so explicit results are excluded by genre tag instead, to keep this source at the same content bar as the other two. Its pagination parameter (`perpage`) is also silently ignored by the live API (confirmed empirically) — results are truncated client-side instead.
+**A domain-specific tool.** `examples/manga/tools/mangaMetadataSearch.ts` is a purpose-built replacement for `webSearch` for one agent. It queries three public sources (MangaDex, AniList and MangaUpdates) in order until one returns results, and normalises their different status and format vocabularies into one shape, so the agent's prompt doesn't need to know which backend answered. It is a good template for "the generic tool doesn't fit this domain, so build a purpose-built one".
 
-All three sources' differing status vocabularies (`ongoing`/`hiatus`/... vs `RELEASING`/`HIATUS`/...) and format signals (origin language/country vs. a direct format field) are normalized inside the tool into one `format`/`status` shape, so the calling agent's system prompt doesn't need to know which backend actually answered. Cover art (`coverUrl`) is extracted from MangaDex and AniList; MangaUpdates provides it natively. A good template for "generic tool doesn't fit this agent's domain" — build (or find) a purpose-built one instead of stretching the generic tool further.
-
-**Known model-behavior quirk observed during testing:** on rare occasions, especially in a multi-step tool-call loop against a query with no real results, the model appears to lose track of the original query partway through — likely `qwen2.5:14b`'s relatively small context window (4096 tokens, per `ollama ps`) getting crowded by several rounds of verbose real tool results. Not something these tools or Homebase's invoke pipeline can fix directly (the tool itself returns correct, verified results every time when called with the actual intended query — confirmed via direct, non-agent testing); flagged here as an observed limitation of small local models under extended tool loops, consistent with the general "model decides whether/how to use tools" unreliability noted above.
+**Limitation of small models.** In a multi-step tool-call loop, small local models can lose track of the original query when several verbose tool results crowd their context window. The tools return correct results when called directly; this is a limit of small models under long tool loops, consistent with the "model decides whether to use tools" caveat above.
 
 ## Adding a new tool
 

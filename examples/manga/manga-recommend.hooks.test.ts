@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { InvokeContext } from "../src/hooks.js";
+import type { InvokeContext } from "../../src/hooks.js";
 import hooks from "./manga-recommend.hooks.js";
 
 const ctx = (readingList: { title: string }[]): InvokeContext =>
