@@ -2,7 +2,7 @@
 
 **A local, Bedrock-style platform for defining agents in YAML and running them across multiple models.** Drop a YAML file in `agents/`, get a documented HTTP endpoint for it, with MCP tool support, RAG knowledge bases, conversation memory and optional tool/hook code.
 
-[![CI](https://github.com/waq-b/homebase/actions/workflows/ci.yml/badge.svg)](https://github.com/waq-b/homebase/actions/workflows/ci.yml)
+[![CI](https://github.com/waq-b/homebase-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/waq-b/homebase-ai/actions/workflows/ci.yml)
 
 Screenshots of the running app (real, taken from a local server with no API keys configured):
 
@@ -63,8 +63,8 @@ TypeScript (strict), Node 22.5+, [Hono](https://hono.dev), [Vercel AI SDK](https
 Requires Node 22.5+ (developed on 24).
 
 ```bash
-git clone https://github.com/waq-b/homebase.git
-cd homebase
+git clone https://github.com/waq-b/homebase-ai.git
+cd homebase-ai
 npm install
 npm run dev          # http://localhost:3000, no .env needed to start
 ```
