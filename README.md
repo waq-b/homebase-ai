@@ -8,6 +8,8 @@ Screenshots of the running app (real, taken from a local server with no API keys
 
 ![Homebase dashboard: agents list and a "Try it" panel](docs/images/dashboard.png)
 
+The API reference at `/docs` is generated automatically. Homebase builds an OpenAPI 3.1 document from the agents it has loaded (input schemas come from the agents' Zod definitions) and renders it with [Scalar](https://scalar.com). Add or edit an agent's YAML and its endpoint appears in the docs with no extra work.
+
 ![Auto-generated API reference at /docs (Scalar)](docs/images/api-docs.png)
 
 ## Why I built it
