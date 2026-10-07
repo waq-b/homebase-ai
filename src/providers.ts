@@ -73,8 +73,7 @@ export const getFallbackModel = (modelId?: string): LanguageModel | undefined =>
   process.env.OPENROUTER_API_KEY ? getOpenrouter()(modelId ?? DEFAULT_FALLBACK_MODEL) : undefined;
 
 // Voyage, not Ollama: Ollama Cloud (this file's default `ollama` client)
-// doesn't serve embedding models (confirmed via a live 401) — there's no
-// local/LAN Ollama box available as an alternative right now either.
+// doesn't serve embedding models (a live call returned 401).
 export const DEFAULT_EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? "voyage-4-lite";
 
 export const getEmbeddingModel = (modelId: string = DEFAULT_EMBEDDING_MODEL): EmbeddingModel<string> =>

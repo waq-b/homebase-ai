@@ -8,3 +8,14 @@ dist/
 toolbar-app/.build/
 toolbar-app/build/
 data/
+
+# local AI-assistant config and internal working docs (kept local, not published)
+.claude/
+CLAUDE.md
+claude.md
+HOMEBASE_BRIEF.md
+coverage/
+.venv/
+.build/
+homebase-client/dist/
+homebase-client/node_modules/

@@ -19,10 +19,9 @@ export interface EmbedManyResult {
 }
 
 /**
- * Batch variant — one real HTTP call to Ollama's /api/embed for all `texts`
- * (ollama-ai-provider's doEmbed sends the whole array as `input` in a single
- * POST, up to maxEmbeddingsPerCall — 2048 by default), not a loop of single
- * embed calls. Used both by POST /embed's batch mode and internally by
+ * Batch variant — one real HTTP call to Voyage's /v1/embeddings for all `texts`
+ * (the adapter in providers.ts sends the whole array as `input` in a single
+ * POST), not a loop of single embed calls. Used both by POST /embed's batch mode and internally by
  * rag.ts to embed a document's chunks in one round trip instead of one
  * request per chunk.
  */

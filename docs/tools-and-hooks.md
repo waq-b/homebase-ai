@@ -43,7 +43,7 @@ export default {
 };
 ```
 
-A thrown error here becomes a clean `500` (`HookError`) via the existing error-handling path — no retry at the Homebase level; the calling app decides whether/how to retry. This is what mangaFinder's own `parseAgentOutput`/`AgentOutputError` already does client-side, successfully — validating in a Homebase `afterInvoke` hook is the same idea, just movable to whichever side makes sense for a given agent.
+A thrown error here becomes a clean `500` (`HookError`) via the existing error-handling path — no retry at the Homebase level; the calling app decides whether/how to retry. This is what `parseAgentOutput`/`AgentOutputError` in `homebase-client` does client-side; validating in a Homebase `afterInvoke` hook is the same idea, just movable to whichever side makes sense for a given agent.
 
 ### `tools`
 

@@ -1,6 +1,5 @@
-/* Modernist — design-system tokens and component classes, from the owner's
-   Claude Design "Homebase dashboard prototype" project (styles.css), copied
-   in verbatim. Plain CSS, no JS, no build step. */
+/* Modernist — design-system tokens and component classes. Plain CSS, no JS,
+   no build step. */
 @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap');
 
 :root {
@@ -152,7 +151,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .dialog-body { font-size: 14px; opacity: 0.85; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
 
-/* Homebase-specific layout, from Homebase Dashboard.dc.html's inline <style>. */
+/* Homebase-specific layout, from the original design mockup. */
 .hb-app { height: 100%; min-height: 100vh; }
 ::-webkit-scrollbar { width: 10px; height: 10px }
 ::-webkit-scrollbar-thumb { background: var(--color-neutral-300) }

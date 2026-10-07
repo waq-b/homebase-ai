@@ -39,7 +39,7 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 app.get("/", (c) => c.redirect("/dashboard"));
 
 // Bearer-token auth: only enforced when HOMEBASE_API_KEY is set, so local
-// dev (no env var) stays open while a public deploy requires the header.
+// dev (no env var) stays open while a shared/remote setup requires the header.
 // /health, "/" (just a redirect, no data), and the dashboard's static shell
 // (HTML/JS/CSS, no data in them) are exempt — the dashboard prompts for the
 // key client-side and attaches it to its own API calls, which stay gated
@@ -86,8 +86,7 @@ app.get("/openapi.json", async (c) => {
 app.get("/docs", Scalar({ url: "/openapi.json" }));
 
 // v2.5 — Homebase-hosted dashboard (public/dashboard/), a static vanilla-JS
-// app implementing the owner's Claude Design prototype against the real
-// API. No second server, no build step — served straight off disk.
+// app built from a design mockup against the real API. No second server, no build step — served straight off disk.
 app.get("/dashboard", (c) => c.redirect("/dashboard/"));
 app.use("/dashboard/*", serveStatic({ root: "./public" }));
 

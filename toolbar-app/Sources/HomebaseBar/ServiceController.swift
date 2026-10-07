@@ -3,8 +3,8 @@ import Foundation
 
 /// Owns one managed service's child process and polls its health, driving
 /// that service's menu section (status + enabled/disabled Start/Stop/
-/// Restart/Open). Generalized from a Homebase-only controller once a second
-/// and third service (mangaFinder API + Web) needed the exact same shape.
+/// Restart/Open). Parameterized by `ManagedService`, so more services can be
+/// added with the same shape.
 @MainActor
 final class ServiceController: ObservableObject, Identifiable {
     enum Status: Equatable {

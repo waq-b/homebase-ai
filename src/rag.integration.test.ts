@@ -13,9 +13,8 @@ import {
   updateDocument,
 } from "./rag.js";
 
-// Hits a real local Ollama instance for embeddings — see README's Testing
-// section for why. Requires `ollama pull nomic-embed-text` and (for the
-// model-override test) `ollama pull mxbai-embed-large`. Not run in CI.
+// Hits the real Voyage embeddings API, so it needs VOYAGE_API_KEY (and network
+// access). See README's Testing section. Not run in CI.
 
 const testKbs: string[] = [];
 const freshKbName = (label: string) => {
@@ -71,7 +70,7 @@ describe("updateDocument", () => {
 
     await updateDocument(kb, documentId, { text: "The completely rewritten synopsis about robots and space." });
 
-    // Calibrated against real nomic-embed-text output for this exact pair (see
+    // Thresholds calibrated against real embedding output for this exact pair (see
     // docs/rag.md's note on maxDistance being empirical, not a fixed Homebase
     // constant): the stale query lands ~1.1 (nothing left in the KB actually
     // matches it — its content was fully replaced), the fresh query ~0.75.

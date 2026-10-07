@@ -16,7 +16,7 @@ const stripHtml = (html: string): string =>
 
 /**
  * Generic URL-to-text tool — no domain awareness, unlike tools/mangaMetadataSearch.ts. Used by
- * promo-parse so a bookmaker offer can be given as a URL instead of pasted text. Truncates long
+ * agents that should accept a URL instead of pasted text. Truncates long
  * pages (T&Cs pages are usually short; this is a safety cap, not a real limit in practice).
  */
 export const fetchPageText = tool({

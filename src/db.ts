@@ -27,6 +27,9 @@ export const getDb = (): DatabaseSync => {
   db.enableLoadExtension(true);
   db.loadExtension(sqliteVec.getLoadablePath());
   db.enableLoadExtension(false);
+  // Several processes/test workers can open the same file at once; wait for
+  // the lock instead of failing immediately with SQLITE_BUSY.
+  db.exec("PRAGMA busy_timeout = 5000");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS kb_config (

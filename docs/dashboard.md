@@ -4,18 +4,18 @@ Deep reference for `public/dashboard/` — a static, no-build-step web UI served
 
 ## Origin
 
-Implements the owner's "Homebase dashboard prototype" Claude Design project (`Homebase Dashboard.dc.html`), imported via the `claude_design` MCP. That prototype is a `.dc.html` file — a Claude-Design-specific format that depends on a custom runtime (`support.js`, loaded from the design project) which in turn pulls React/ReactDOM/Babel from a CDN at runtime. Rather than ship that runtime, this implementation keeps the prototype's visual system (`_ds/.../styles.css`, copied into `public/dashboard/styles.css` verbatim — plain CSS, no JS, no build step) and reimplements the interactive behavior as plain vanilla JS (`public/dashboard/app.js`) wired to Homebase's real HTTP API instead of the prototype's mocked in-memory data. Matches the project's "keep it boring" convention — no bundler, no framework, no CDN dependency for the app logic itself (the CSS's `@import` of Google Fonts is the only external asset).
+The dashboard started from a design mockup. The mockup was a prototype that needed a custom runtime plus React and Babel loaded from a CDN, so I did not ship it as-is. I kept its visual system (`public/dashboard/styles.css`, plain CSS) and reimplemented the interactive behavior as vanilla JS (`public/dashboard/app.js`) wired to Homebase's real HTTP API instead of the mockup's fake in-memory data. No bundler, no framework, no CDN dependency for the app logic (the CSS's `@import` of Google Fonts is the only external asset).
 
-## Two sections adapted from the original design
+## Two sections adapted from the mockup
 
-The prototype assumed a richer API surface than Homebase actually exposes. Rather than fake data to match the original mockup, these two sections were adapted to what's real:
+The mockup assumed a richer API than Homebase exposes. Rather than fake data, these two sections were adapted to what is real:
 
-- **Agents is read-only.** `GET /agents` returns only `{ name, description, input }` — not the model, system prompt, params, or hooks path the prototype's detail panel expected, and there's no create/update/delete-agent API (agent configs are hand-edited YAML files, by design — see `docs/agents.md`). The dashboard's Agents section lists what's real and links back to the on-disk YAML for the rest. It does support a real "Try it" panel that invokes the agent via `POST /agents/:name/invoke`.
-- **"Logs & Errors" was replaced with "Memory."** The prototype's Logs section was entirely fabricated client-side mock data (`genLogs()`) with no backing endpoint anywhere in Homebase — there is no request-logging feature. Building one just to match a mockup would be dishonest scope creep, so this section was swapped for a real one: conversation memory, which existed but had no way to *list* known conversation ids (`GET /memory/:conversationId` requires already knowing the id). See the next section.
+- **Agents is read-only.** `GET /agents` returns only `{ name, description, input }`, not the model, system prompt, params or hooks path, and there is no create/update/delete-agent API (agent configs are hand-edited YAML files by design, see `docs/agents.md`). The Agents section lists what is real. It has a working "Try it" panel that calls `POST /agents/:name/invoke`.
+- **"Logs & Errors" became "Memory."** The mockup's logs section was client-side mock data with no backing endpoint, and Homebase has no request-logging feature. I replaced it with conversation memory, which existed but had no way to list known conversation ids (`GET /memory/:conversationId` requires already knowing the id). See the next section.
 
 ## New endpoint: `GET /memory`
 
-Added specifically to back this dashboard's Memory panel — lists every `conversationId` with at least one stored turn:
+Added to back this dashboard's Memory panel. It lists every `conversationId` with at least one stored turn:
 
 ```bash
 curl localhost:3000/memory

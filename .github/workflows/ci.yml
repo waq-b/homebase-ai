@@ -21,8 +21,8 @@ jobs:
 
       - run: npm run typecheck
 
-      # Excludes *.integration.test.ts (needs a real local Ollama instance,
-      # which this runner doesn't have) — see README's Testing section.
+      # Excludes *.integration.test.ts (they call the real Voyage embeddings
+      # API and need credentials this runner doesn't have) — see README.
       - run: npm run test:unit
 
   homebase-client:

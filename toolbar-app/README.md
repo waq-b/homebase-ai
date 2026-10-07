@@ -1,10 +1,18 @@
 # Homebase Bar
 
-A macOS menu bar utility to control local dev services without a terminal — start/stop/restart, live status, and a shortcut to open each one. Separate Swift/SwiftUI project, nested in the Homebase repo for now.
+A small macOS menu bar utility (Swift/SwiftUI, macOS only) that starts, stops and restarts a local Homebase dev server without a terminal, shows live status, and opens the API docs or dashboard. It is a separate Swift package nested in this repo; it only talks to Homebase over HTTP and spawns/kills the `npm run dev` process.
 
-Manages three services, each independently (no dependency chaining — starting/stopping one never touches another): **Homebase**, **mangaFinder API**, and **mangaFinder Web** (its Vite dev server). No functional relationship to any of their code — this only talks to them over plain HTTP (a per-service health check) and spawns/kills each one's dev process.
+`ServiceController` is parameterized by `ManagedService` (see `ManagedService.swift`), so more services can be added with the same start/stop/health-poll shape. Only Homebase is configured.
 
-Started as a Homebase-only tool; generalized into `ServiceController` (parameterized by `ManagedService`, see `ManagedService.swift`) once a second and third service needed the exact same start/stop/health-poll shape.
+## Configure
+
+The app runs `npm run dev` in your Homebase checkout. By default it looks in `~/Projects/homebase`. Set `HOMEBASE_REPO` to use another path:
+
+```bash
+HOMEBASE_REPO=/path/to/homebase swift run
+```
+
+A double-clicked `.app` does not inherit shell variables. Either keep the checkout at the default path, or run `launchctl setenv HOMEBASE_REPO /path/to/homebase` before launching it.
 
 ## Run
 
@@ -26,11 +34,11 @@ swift build -c release
 # bundle at build/HomebaseBar.app
 ```
 
-Double-click to launch, or drag `build/HomebaseBar.app` into `/Applications`. No dock icon (`LSUIElement` in `Info.plist`) — it only shows up in the menu bar.
+Double-click to launch, or drag `build/HomebaseBar.app` into `/Applications`. No dock icon (`LSUIElement` in `Info.plist`); it only shows up in the menu bar.
 
 ## Notes
 
-- Every service's repo path, start command, health-check URL, and "Open" URL are hardcoded in `ManagedService.swift` for v1 (a settings screen can replace this later — not planned).
-- Each service polls its own health URL every 5s (Homebase: `GET /agents`; mangaFinder API: `GET /health`; mangaFinder Web: `GET /` since Vite has no JSON health endpoint, any `200` counts). Per-service status: green = running, yellow = starting, red = stopped. The toolbar icon shows an aggregate — green only if all three are up, red only if all three are down, yellow otherwise.
-- Per-agent enable/disable and any service's own API changes are explicitly out of scope for v1.
-- Assumes `mangaFinder` lives at `~/Projects/mangaFinder` (sibling to this repo) with a `web/` subdirectory for the Vite app — adjust `ManagedService.swift` if that ever moves.
+- The start command, health-check URL and "Open" URLs are hardcoded in `ManagedService.swift`.
+- The service polls `GET /agents` every 5s. Status: green = running, yellow = starting, red = stopped. The menu bar icon shows the aggregate.
+- Per-agent enable/disable is out of scope.
+- Not covered by CI (CI runs on Linux); I build and run it locally.

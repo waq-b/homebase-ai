@@ -41,11 +41,11 @@ Useful for app-side display or debugging — these two routes never touch the mo
 
 ## Isolation
 
-Isolation is **"different id → different history,"** not access control — there's no auth in v1 (matching Homebase's overall no-auth stance), so anyone who knows/guesses a `conversationId` can read or extend that conversation via these routes. Apps are responsible for generating IDs that don't collide or leak across users/sessions if that matters for their use case (e.g. don't use a guessable sequential id).
+Isolation is **"different id → different history,"** not access control — the only auth is the optional single shared bearer token (`HOMEBASE_API_KEY`), so anyone who can reach the server and knows or guesses a `conversationId` can read or extend that conversation via these routes. Apps are responsible for generating IDs that don't collide or leak across users/sessions if that matters for their use case (e.g. don't use a guessable sequential id).
 
 ## Retention
 
-Keeps every turn forever — no TTL/expiry in v1 (the ticket's own open question, resolved this way; revisit if storage growth becomes a problem). No summarization or truncation of long histories either — all prior turns for a `conversationId` are injected every time, so very long conversations will grow the prompt accordingly.
+Keeps every turn forever — no TTL/expiry in v1 (revisit if storage growth becomes a problem). No summarization or truncation of long histories either — all prior turns for a `conversationId` are injected every time, so very long conversations will grow the prompt accordingly.
 
 ## Storage
 

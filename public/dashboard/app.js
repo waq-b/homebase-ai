@@ -1,9 +1,8 @@
 // Homebase Dashboard — vanilla JS, no build step, no framework. Implements
-// the "Homebase Dashboard.dc.html" Claude Design prototype's visual system
-// (styles.css, copied verbatim) wired to Homebase's real API.
+// a design-system stylesheet (styles.css) wired to Homebase's real API.
 //
-// Two sections from the original design don't map onto anything the real API
-// exposes and were adapted rather than faked:
+// Two sections from the original design mockup don't map onto anything the
+// real API exposes and were adapted rather than faked:
 //  - "Agents" is read-only (name/description/input type only — GET /agents
 //    doesn't expose system prompt/model/hooks, and there's no create/edit/
 //    delete-agent API; agent configs are hand-edited YAML files).
@@ -592,8 +591,8 @@ const renderDialogs = () => {
   if (state.kbDialogOpen) {
     const nameInput = el("input", { class: "input hb-mono" });
     const modelSelect = el("select", { class: "input" }, [
-      el("option", { value: "nomic-embed-text", text: "nomic-embed-text" }),
-      el("option", { value: "mxbai-embed-large", text: "mxbai-embed-large" }),
+      el("option", { value: "voyage-4-lite", text: "voyage-4-lite" }),
+      el("option", { value: "voyage-4", text: "voyage-4" }),
     ]);
     const docInput = el("textarea", { class: "input", style: "min-height:80px", placeholder: "First document's text — a KB is created on its first document" });
     root.appendChild(

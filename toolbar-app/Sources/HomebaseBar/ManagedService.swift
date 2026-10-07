@@ -17,36 +17,26 @@ struct ManagedService: Identifiable {
 }
 
 extension ManagedService {
-    // Hardcoded for v1, matching Homebase's own toolbar-app README note — a
-    // settings screen can replace this later, not needed for now.
+    /// Where the Homebase checkout lives. Override with the HOMEBASE_REPO
+    /// environment variable; defaults to ~/Projects/homebase. A menu-bar app
+    /// launched from Finder does not inherit shell variables, so for a
+    /// double-clicked .app either use the default location or set the variable
+    /// with `launchctl setenv HOMEBASE_REPO /path/to/homebase`.
+    static var homebaseRepoPath: String {
+        if let path = ProcessInfo.processInfo.environment["HOMEBASE_REPO"], !path.isEmpty {
+            return (path as NSString).expandingTildeInPath
+        }
+        return NSHomeDirectory() + "/Projects/homebase"
+    }
 
     static let homebase = ManagedService(
         name: "Homebase",
-        repoPath: "~/Projects/homebase",
+        repoPath: homebaseRepoPath,
         arguments: ["npm", "run", "dev"],
         healthURL: URL(string: "http://localhost:3000/agents")!,
         openURL: URL(string: "http://localhost:3000/docs")!,
         dashboardURL: URL(string: "http://localhost:3000/dashboard")!,
     )
 
-    static let mangaFinderAPI = ManagedService(
-        name: "mangaFinder API",
-        repoPath: "~/Projects/mangaFinder",
-        arguments: ["npm", "run", "dev"],
-        healthURL: URL(string: "http://localhost:3100/health")!,
-        openURL: URL(string: "http://localhost:3100/docs")!,
-        dashboardURL: nil,
-    )
-
-    static let mangaFinderWeb = ManagedService(
-        name: "mangaFinder Web",
-        repoPath: "~/Projects/mangaFinder/web",
-        arguments: ["npm", "run", "dev"],
-        // Vite has no JSON health endpoint — any 200 on the root is enough.
-        healthURL: URL(string: "http://localhost:5173")!,
-        openURL: URL(string: "http://localhost:5173")!,
-        dashboardURL: nil,
-    )
-
-    static let all: [ManagedService] = [homebase, mangaFinderAPI, mangaFinderWeb]
+    static let all: [ManagedService] = [homebase]
 }

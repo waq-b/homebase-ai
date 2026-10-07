@@ -1,8 +1,8 @@
 # homebase-client
 
-Shared, domain-free client for calling [Homebase](..) from a toolkit app — agent invoke (plain + SSE streaming), RAG knowledge bases, and conversation memory. Extracted from mangaFinder's `src/homebase/*` once betBuddy needed the same ~185 lines of boilerplate a second time. Lives inside the Homebase repo (this is the thing it's a client *for*) rather than its own repo, so it ships and versions alongside the API surface it wraps.
+Shared, domain-free TypeScript client for calling [Homebase](..) from another app: agent invoke (plain + SSE streaming), RAG knowledge bases, and conversation memory. It lives inside the Homebase repo because it is the client for this API, so it ships and versions alongside the API surface it wraps.
 
-Not published — consumed via a `file:` dependency, from a sibling app repo (e.g. `toolkit/betBuddy`, `toolkit/mangaFinder`):
+Not published to npm. Consume it through a `file:` dependency from a sibling app repo:
 
 ```json
 {
@@ -16,7 +16,7 @@ Then `npm install` and `npm run build` (in this package) whenever its source cha
 
 ## What's deliberately *not* in here
 
-- **Mock mode.** A mock stands in for a specific agent's contract (e.g. mangaFinder's `mockInvokeAgent` for `manga-search`/`manga-recommend`/`manga-log`), which this package has no knowledge of. Apps that want a `HOMEBASE_MODE=mock` toggle branch on their own config before calling `invokeAgent` — this package's `invokeAgent` always hits the real Homebase HTTP API.
+- **Mock mode.** A mock stands in for a specific agent's contract (for example a `mockInvokeAgent` for one specific agent), which this package has no knowledge of. Apps that want a `HOMEBASE_MODE=mock` toggle branch on their own config before calling `invokeAgent` — this package's `invokeAgent` always hits the real Homebase HTTP API.
 - **Per-agent output schemas.** `parseAgentOutput(agentName, raw, schema)` is generic (JSON.parse + Zod validate); the Zod schemas themselves (what a specific agent's output actually looks like) are app-specific and stay in the consuming app.
 
 ## Usage
